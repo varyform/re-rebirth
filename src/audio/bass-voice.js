@@ -82,9 +82,11 @@ export class BassVoice {
       return;
     }
     // A tie holds the previous note: no new pitch, no retrigger, gate stays open.
+    // Whether the *next* note slides in depends on this held step's own slide flag.
     if (s.tie && this.holding) {
       this.holding = !!next.tie;
-      if (!this.holding) this.vca.gain.setTargetAtTime(0, t + stepDur * GATE, 0.006);
+      this.sliding = s.slide && next.gate && !next.tie;
+      if (!this.holding && !this.sliding) this.vca.gain.setTargetAtTime(0, t + stepDur * GATE, 0.006);
       return;
     }
     const freq = this.osc.frequency;

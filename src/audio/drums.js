@@ -124,9 +124,11 @@ function clap(v, level, hz, tail, q = 1.6) {
   run(v, n, 0.04 + tail);
 }
 
-function hat(v, { level, decay, scale = 1, hp = 7000, noiseMix = 0, choke = false, chokeable = false }) {
+function hat(v, { level, decay, scale = 1, hp = 7000, noiseMix = 0, metalMix = 1, choke = false, chokeable = false }) {
   const out = env(v, level, decay, 0.0008);
-  chain(metal(v, scale, decay + 0.05), filter(v, 'bandpass', 10000, 1), filter(v, 'highpass', hp), out);
+  const mg = v.ctx.createGain();
+  mg.gain.value = metalMix;
+  chain(metal(v, scale, decay + 0.05), filter(v, 'bandpass', 10000, 1), filter(v, 'highpass', hp), mg, out);
   if (noiseMix) {
     const n = noise(v);
     const ng = v.ctx.createGain();
@@ -194,8 +196,10 @@ const R909 = {
   rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc, 1.2)],
   // Hat/clap/cymbal levels calibrated against ReBirth renders (~8 dB hotter than v1).
   cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 6, 1700, 0.28, 0.9)],
-  ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 8000, noiseMix: 0.6, choke: true })],
-  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.5, decay: 0.25 + P('ohDecay') * 1.5, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
+  // The 909's sampled hats are broadband (flat ~4-13 kHz in ReBirth recordings):
+  // mostly high-passed noise with a lighter metallic layer.
+  ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 3.5, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 2400, noiseMix: 1, metalMix: 0.35, choke: true })],
+  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 3, decay: 0.25 + P('ohDecay') * 1.5, scale: 1.3, hp: 3800, noiseMix: 1, metalMix: 0.35, chokeable: true })],
   cr: ['cy', (v, P) => cymbal(v, { level: lvl(P('crLevel')) * v.acc * 1.6, decay: 1.6, scale: 1.7 * (0.7 + P('crTune') * 0.6), hp: 4000, bp: 6000, noiseMix: 0.5 })],
   rd: ['cy', (v, P) => cymbal(v, { level: lvl(P('rdLevel')) * v.acc * 1.2, decay: 1.2, scale: 2.3 * (0.7 + P('rdTune') * 0.6), hp: 5000, bp: 8000, noiseMix: 0.15 })],
 };
