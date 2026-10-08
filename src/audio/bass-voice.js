@@ -9,12 +9,14 @@
 // (C+1 octave with tune at max plays C4 = 262 Hz).
 const BASE_MIDI = 36;
 
-// Tune knob (0..127, centre 64) scales frequency linearly: ×0.5 at 0, ×1 at
-// 64, ×2 at 127. Fitted to a ReBirth recording at tune 42 and 127.
+// Tune knob (0..127, centre 64), fitted to a ReBirth recording at 42, 64, 66,
+// 111 and 127 (measured -330, 0, 0, +900, +1200 cents). Upwards it moves in whole
+// semitones up to +1 octave; downwards it's continuous, scaling frequency
+// linearly (half speed at 0).
 function tuneCents(knob) {
   const u = knob * 127 - 64;
-  const ratio = u >= 0 ? 1 + u / 63 : 1 + u / 128;
-  return 1200 * Math.log2(ratio);
+  if (u >= 0) return Math.round((u * 12) / 63) * 100;
+  return 1200 * Math.log2(1 + u / 128);
 }
 const GATE = 0.55; // fraction of a step the gate stays open
 const GLIDE = 0.035; // slide time constant, seconds
