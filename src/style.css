@@ -1,0 +1,28 @@
+@layer reset, base;
+
+@layer reset {
+  html,
+  body {
+    margin: 0;
+    padding: 0;
+  }
+}
+
+@layer base {
+  :root {
+    --color-canvas: oklch(0.13 0.005 270);
+  }
+
+  body {
+    display: flex;
+    min-height: 100vh;
+    background: var(--color-canvas);
+  }
+
+  /* Auto margins center the rack but collapse to 0 when it overflows,
+     so the scrolled-off part stays reachable (unlike place-items: center). */
+  #rack {
+    display: block;
+    margin: auto;
+  }
+}
