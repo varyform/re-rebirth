@@ -1,5 +1,5 @@
 // A starter song so the rack isn't empty on first load.
-import { emptyBassPattern, emptyDrumPattern } from './state.js';
+import { emptyBassPattern, emptyDrumPattern, HIT } from './state.js';
 
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
 
@@ -21,10 +21,10 @@ function bassLine(src) {
   return pattern;
 }
 
-// "x" = normal hit, "o" = soft hit.
-function drumPattern(tracks, hit = 2) {
+// "x" = hit, "X" = accented hit (909 only).
+function drumPattern(tracks) {
   const pattern = emptyDrumPattern();
-  for (const [k, v] of Object.entries(tracks)) pattern.tracks[k] = [...v].map((c) => (c === 'x' ? hit : c === 'o' ? 1 : 0));
+  for (const [k, v] of Object.entries(tracks)) pattern.tracks[k] = [...v].map((c) => (c === 'X' ? HIT.accent : c === 'x' ? HIT.on : HIT.off));
   return pattern;
 }
 
@@ -46,14 +46,13 @@ export function loadDemo(state) {
       cp: '............x...',
       ac: '....x.......x...',
     },
-    1,
   );
   state.drums.r808.selected = 'ch';
 
   state.drums.r909.patterns[0] = drumPattern({
     bd: 'x...x...x...x...',
     cp: '....x.......x...',
-    sd: '.......o.o....x.',
+    sd: '.......x.x....X.',
     ch: 'x...x...x...x...',
     oh: '..x...x...x...x.',
     rd: 'x.x.x.x.x.x.x.x.',

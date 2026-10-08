@@ -137,7 +137,7 @@ export class DrumMachine {
     const stepW = (w - 18 - STEP_X) / 16;
     const bw = stepW - 6;
     const playhead = state.transport.playing ? (state.transport.positions[cfg.id] ?? -1) : -1;
-    const hint = cfg.id === 'r909' ? '   SHIFT-CLICK: SOFT / NORMAL / FLAM' : '';
+    const hint = cfg.id === 'r909' ? '   SHIFT-CLICK: ON / ACCENT / FLAM' : '';
 
     text(ctx, `\u25B8 ${cfg.trackNames[dev.selected]}${hint}`, STEP_X + 3, 131, { size: 6.5, weight: 800, align: 'left', color: t.bottomInk, spacing: 0.6 });
 
@@ -147,9 +147,9 @@ export class DrumMachine {
       const playing = playhead === i;
       const hit = track[i];
       if (i >= pattern.length) ctx.globalAlpha = 0.3;
-      if (hit === HIT.soft && cfg.id === 'r909') ctx.globalAlpha *= 0.5;
       led(ctx, cx, 141, 2.8, hit > 0 || playing, playing && !hit ? C.inkLight : t.led);
-      if (hit === HIT.soft && cfg.id === 'r909') ctx.globalAlpha *= 2;
+      // Second small LED marks the 909's per-step accent (yellow) or flam.
+      if (hit === HIT.accent) led(ctx, cx + 7, 141, 1.8, true, C.ledYellow);
       if (hit === HIT.flam) led(ctx, cx + 7, 141, 1.8, true, t.led);
       const face = t.stepFaces[group];
       const off = button(ctx, cx - bw / 2, 149, bw, 26, { face: [shade(face, 0.22), face, shade(face, -0.18)], pressed: playing, radius: 2.5 });
@@ -173,11 +173,10 @@ export class DrumMachine {
     }
   }
 
-  // Click/drag paints hits on/off; on the 909, shift-click cycles soft → normal → flam → off.
+  // Click/drag paints hits on/off; on the 909, shift-click cycles on → accent → flam → off.
   stepHandler(track, stepW) {
     const is909 = this.cfg.id === 'r909';
-    const on = is909 ? HIT.normal : 1;
-    const paint = paintSteps({ x0: STEP_X, stepW, get: (i) => track[i] > 0, set: (i, v) => (track[i] = v ? on : 0) });
+    const paint = paintSteps({ x0: STEP_X, stepW, get: (i) => track[i] > 0, set: (i, v) => (track[i] = v ? HIT.on : HIT.off) });
     return {
       ...paint,
       down: (ev) => {

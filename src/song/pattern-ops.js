@@ -61,7 +61,7 @@ export function randomizePattern(state, id) {
   const p = emptyDrumPattern();
   p.length = current.length;
   p.shuffle = current.shuffle;
-  const hit = id === 'r909' ? HIT.normal : 1;
+  const hit = HIT.on;
   const density = { bd: [0.9, 0.1, 0.25, 0.1], sd: [0, 0.05, 0.1, 0.05], ch: [0.8, 0.4, 0.8, 0.4], oh: [0, 0, 0.35, 0], cp: [0, 0, 0, 0], ac: [0.4, 0, 0.1, 0] };
   for (const [track, [onBeat, e, and, a]] of Object.entries(density)) {
     p.tracks[track] = Array.from({ length: STEPS }, (_, i) => (chance([onBeat, e, and, a][i % 4]) ? hit : 0));

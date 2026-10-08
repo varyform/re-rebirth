@@ -123,7 +123,10 @@ export function parseRbs(buffer, fileName = '') {
   if (r808) session.drums.r808 = readDrums(r, r808, 'r808', R808_KNOBS, R808_TRACKS, P);
   if (r909) session.drums.r909 = readDrums(r, r909, 'r909', R909_KNOBS, R909_TRACKS, P);
 
-  if (trkl) readTracks(r, trkl.children.filter((c) => c.id === 'TRAK'), session.song);
+  // HEAD byte 6: 0 for ReBirth 2.0 files, 2 for 2.0.1; they number mixer controllers differently.
+  const head = find(top, 'HEAD');
+  const version = head ? r.u8(head.at + 6) : 0;
+  if (trkl) readTracks(r, trkl.children.filter((c) => c.id === 'TRAK'), session.song, version);
   const song = session.song;
   const last = Math.max(0, ...Object.values(song.tracks).flatMap((t) => t.map((e) => e.tick)));
   song.length = Math.max(song.loopEnd, Math.ceil((last + 1) / TICKS_PER_BAR) * TICKS_PER_BAR);
@@ -278,7 +281,7 @@ const fxValue = (key, v) => {
   return knob(v);
 };
 
-function readTracks(r, traks, song) {
+function readTracks(r, traks, song, version) {
   const [mixer, b1, b2, r808, r909, ...fx] = traks.map((c) => readEvents(r, c));
   const convert = (events, map) =>
     (events ?? []).flatMap(({ tick, id, value }) => {
@@ -295,10 +298,32 @@ function readTracks(r, traks, song) {
       return convert(events, (cid, v) => (names?.[cid] ? [`${prefix}.${names[cid]}`, fxValue(`${prefix}.${names[cid]}`, v)] : null));
     })
     .sort((a, b) => a.tick - b.tick);
-  song.tracks.mixer = convertMixer(mixer ?? []);
+  song.tracks.mixer = version >= 2 ? convertMixer201(mixer ?? []) : convertMixer(mixer ?? []);
 }
 
-// Mixer controllers: per channel k, id 5+8k+n: n=0 level, 1 pan, 2 delay send,
+// ReBirth 2.0.1 mixer controllers: 1 compressor device, 2 PCF device
+// (0 off, 1 master, 2..5 channels), then per channel k ids 6+6k+n:
+// n=0 level, 1 pan, 2 delay send, 3 distortion on.
+function convertMixer201(events) {
+  const out = [];
+  for (const { tick, id, value } of events) {
+    if (id === 1) {
+      out.push({ tick, key: 'fx.comp.routed', value: value ? 1 : 0 });
+      if (value) out.push({ tick, key: 'fx.comp.target', value: choice(Math.min(value - 1, COMP_TARGETS.length - 1), COMP_TARGETS.length) });
+    }
+    if (id === 2) out.push({ tick, key: 'fx.pcf.target', value: choice(value >= 2 ? value - 1 : 0, PCF_TARGETS.length) });
+    if (id < 6 || id >= 30) continue;
+    const chId = CHANNEL_IDS[Math.floor((id - 6) / 6)];
+    const n = (id - 6) % 6;
+    if (n === 0) out.push({ tick, key: `mixer.${chId}.level`, value: knob(value) });
+    if (n === 1) out.push({ tick, key: `mixer.${chId}.pan`, value: knob(value) });
+    if (n === 2) out.push({ tick, key: `mixer.${chId}.delay`, value: knob(value) });
+    if (n === 3) out.push({ tick, key: `mixer.${chId}.dist`, value: value ? 1 : 0 });
+  }
+  return out;
+}
+
+// ReBirth 2.0 mixer controllers: per channel k, id 5+8k+n: n=0 level, 1 pan, 2 delay send,
 // 3 distortion on, 4 pattern filter on this channel, 5 compressor on this
 // channel (none set = compressor on master). The routing flags become our
 // single target params, resolved per tick.

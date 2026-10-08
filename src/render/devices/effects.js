@@ -71,6 +71,7 @@ export class EffectsColumn {
     this.addKnob(comp, 44, 50, 14, 'fx.comp.amount', 'AMOUNT', 0.3);
     this.addKnob(comp, 110, 50, 14, 'fx.comp.threshold', 'THRESHOLD', 0.5);
     state.define('fx.comp.target', 0);
+    state.define('fx.comp.routed', 1);
 
     this.addKnob(pcf, 156, 38, 10, 'fx.pcf.freq', 'FREQ', 0.45, { labelSize: 5.5 });
     this.addKnob(pcf, 194, 38, 10, 'fx.pcf.reso', 'RESO', 0.5, { labelSize: 5.5 });
@@ -90,7 +91,7 @@ export class EffectsColumn {
       if (m.key === 'mixer') this.drawMixer(ctx, m);
       if (m.key === 'delay') this.drawDelay(ctx);
       if (m.key === 'dist') this.drawDist(ctx, m);
-      if (m.key === 'comp') this.drawChoice(ctx, 160, 36, m.w - 174, 'fx.comp.target', COMP_TARGETS, 'TARGET');
+      if (m.key === 'comp') this.drawCompTarget(ctx, 160, 36, m.w - 174);
       if (m.key === 'pcf') this.drawPcf(ctx, m);
       for (const k of m.knobs) k.draw(ctx, state);
       ctx.restore();
@@ -180,6 +181,26 @@ export class EffectsColumn {
     const on = CHANNELS.filter(([id]) => this.state.on01(`mixer.${id}.dist`)).map(([, label]) => label.replace(/\D+/g, (s) => s[0]));
     text(ctx, on.length ? on.join(' ') : 'NONE', x + w / 2, 45.5, { size: 7, family: MONO, color: C.lcdGreenOn });
     text(ctx, 'MIXER D SWITCHES', x + w / 2, 66, { size: 5.5, color: C.inkMuted, spacing: 0.6 });
+  }
+
+  // Compressor routing cycles MASTER → channels → OFF. OFF is a separate param so
+  // the target's stored value keeps its meaning in saved sessions.
+  drawCompTarget(ctx, x, y, w) {
+    const { state } = this;
+    const n = COMP_TARGETS.length;
+    const routed = state.on01('fx.comp.routed');
+    const i = state.choice('fx.comp.target', n);
+    lcd(ctx, x, y, w, 18, C.lcdGreen);
+    text(ctx, `\u25B8 ${routed ? COMP_TARGETS[i] : 'OFF'}`, x + w / 2, y + 9.5, { size: 7.5, family: MONO, color: C.lcdGreenOn });
+    text(ctx, 'TARGET', x + w / 2, y + 30, { size: 5.5, color: C.inkMuted, spacing: 0.8 });
+    const next = () => {
+      if (!routed) {
+        state.set('fx.comp.routed', 1);
+        state.setChoice('fx.comp.target', 0, n);
+      } else if (i === n - 1) state.set('fx.comp.routed', 0);
+      else state.setChoice('fx.comp.target', i + 1, n);
+    };
+    hits.rect(ctx, x, y, w, 18, click(next));
   }
 
   // Click the readout to cycle a routing choice.

@@ -19,6 +19,8 @@ const MAX_SWING = 0.42; // fraction of a step that off-beats move at full shuffl
 const METER_RANGE_DB = 48;
 const MAX_FILTER_HZ = 14000;
 const PAN_WIDTH = 0.5;
+// 909 per-step accent ("double power"): measured +3.3..+4.2 dB on the same voice.
+const STEP_ACCENT = 1.55;
 
 // Unity at the top: song files usually run channel faders near full.
 const faderGain = (v) => v * v;
@@ -112,7 +114,7 @@ export class AudioEngine {
   // Index into CHANNELS for a routing choice, or -1 (off) / 'master'.
   compChain() {
     const { state } = this;
-    if (!state.on01('fx.comp.on')) return null;
+    if (!state.on01('fx.comp.on') || !state.on01('fx.comp.routed')) return null;
     const i = state.choice('fx.comp.target', COMP_TARGETS.length);
     return i === 0 ? this.masterInserts : this.channels[CHANNELS[i - 1][0]].inserts;
   }
@@ -244,12 +246,11 @@ export class AudioEngine {
     const accent = state.drumTrack(id, 'ac', pattern)[pos] ? 1 + state.get(`${id}.ac.level`) * 0.8 : 1;
     for (const [track, [group, voice]] of Object.entries(KITS[id])) {
       if (only && track !== only) continue;
-      const hit = only ? HIT.normal : state.drumTrack(id, track, pattern)[pos];
+      const hit = only ? HIT.on : state.drumTrack(id, track, pattern)[pos];
       if (!hit) continue;
-      // The 909 stores soft/normal/flam per step; the 808 only on/off.
-      const soft = id === 'r909' && hit === HIT.soft ? 0.55 : 1;
+      const stepAccent = id === 'r909' && hit === HIT.accent ? STEP_ACCENT : 1;
       const P = (k) => state.get(`${id}.${group}.${k}`);
-      const v = { ctx: this.ctx, out: this.channels[id].input, noise: this.noise, kit: this.kits[id], t, acc: accent * soft };
+      const v = { ctx: this.ctx, out: this.channels[id].input, noise: this.noise, kit: this.kits[id], t, acc: accent * stepAccent };
       if (id === 'r909' && hit === HIT.flam) {
         voice({ ...v, acc: v.acc * 0.5 }, P);
         v.t += 0.006 + state.get('r909.ac.flam') * 0.03;

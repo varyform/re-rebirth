@@ -6,8 +6,9 @@ export const BASS_IDS = ['bass1', 'bass2'];
 export const DRUM_IDS = ['r808', 'r909'];
 export const DEVICE_IDS = [...BASS_IDS, ...DRUM_IDS];
 
-// Drum step values, as stored in ReBirth songs.
-export const HIT = { off: 0, soft: 1, normal: 2, flam: 3 };
+// Drum step values, as stored in ReBirth songs. The 909 has per-step accents
+// ("double power") and flams; the 808 only uses off/on.
+export const HIT = { off: 0, on: 1, accent: 2, flam: 3 };
 
 // tie: sustain the previous (slid) note through this step instead of playing a new one.
 export const emptyBassStep = () => ({ note: 0, octave: 0, accent: false, slide: false, gate: false, tie: false });
