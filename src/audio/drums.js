@@ -190,8 +190,8 @@ const R909 = {
   ht: ['ht', (v, P) => tom(v, { hz: 180 * (0.8 + P('tune') * 0.5), decay: 0.1 + P('decay') * 0.4, level: lvl(P('level')) * v.acc, noiseAmt: 0.2 })],
   rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc, 1.2)],
   cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 1.6, 1250, 0.28)],
-  ch: ['hh', (v, P) => hat(v, { level: lvl(P('chLevel')) * v.acc * 0.8, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 8000, noiseMix: 0.6, choke: true })],
-  oh: ['hh', (v, P) => hat(v, { level: lvl(P('ohLevel')) * v.acc * 0.8, decay: 0.15 + P('ohDecay') * 0.9, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
+  ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.8, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 8000, noiseMix: 0.6, choke: true })],
+  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.8, decay: 0.15 + P('ohDecay') * 0.9, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
   cr: ['cy', (v, P) => cymbal(v, { level: lvl(P('crLevel')) * v.acc * 0.8, decay: 1.6, scale: 1.7 * (0.7 + P('crTune') * 0.6), hp: 4000, bp: 6000, noiseMix: 0.5 })],
   rd: ['cy', (v, P) => cymbal(v, { level: lvl(P('rdLevel')) * v.acc * 0.6, decay: 1.2, scale: 2.3 * (0.7 + P('rdTune') * 0.6), hp: 5000, bp: 8000, noiseMix: 0.15 })],
 };

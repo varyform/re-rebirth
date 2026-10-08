@@ -505,6 +505,33 @@ export function icon(ctx, kind, cx, cy, s, color) {
       ctx.lineTo(cx + h, cy - s * 0.35);
       ctx.lineTo(cx - h, cy - s * 0.35);
       break;
+    case 'left':
+      ctx.moveTo(cx - s * 0.4, cy);
+      ctx.lineTo(cx + s * 0.35, cy - h);
+      ctx.lineTo(cx + s * 0.35, cy + h);
+      break;
+    case 'right':
+      ctx.moveTo(cx + s * 0.4, cy);
+      ctx.lineTo(cx - s * 0.35, cy - h);
+      ctx.lineTo(cx - s * 0.35, cy + h);
+      break;
+    case 'rec':
+      ctx.arc(cx, cy, s * 0.42, 0, Math.PI * 2);
+      break;
+    case 'loop':
+      ctx.closePath();
+      ctx.save();
+      ctx.strokeStyle = color;
+      ctx.lineWidth = s * 0.14;
+      ctx.beginPath();
+      ctx.arc(cx, cy, s * 0.36, Math.PI * 0.25, Math.PI * 1.95);
+      ctx.stroke();
+      ctx.restore();
+      ctx.beginPath();
+      ctx.moveTo(cx + s * 0.36, cy - s * 0.32);
+      ctx.lineTo(cx + s * 0.62, cy + s * 0.02);
+      ctx.lineTo(cx + s * 0.1, cy + s * 0.02);
+      break;
   }
   ctx.closePath();
   ctx.fill();

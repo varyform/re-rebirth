@@ -1,5 +1,5 @@
 export const INSERTS = ['dist', 'comp', 'pcf'];
-export const PCF_TYPES = ['lowpass', 'bandpass', 'highpass', 'notch'];
+export const PCF_TYPES = ['bandpass', 'lowpass'];
 
 export function whiteNoise(ctx, seconds) {
   const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
@@ -8,19 +8,15 @@ export function whiteNoise(ctx, seconds) {
   return buf;
 }
 
-// shape 0 = smooth tanh saturation, 1 = hard clipping.
-export function distortionCurve(amount, shape, n = 2048) {
-  const drive = 1 + amount * amount * 40;
-  const norm = Math.tanh(drive);
-  const curve = new Float32Array(n);
-  for (let i = 0; i < n; i++) {
-    const x = (i / (n - 1)) * 2 - 1;
-    const soft = Math.tanh(x * drive) / norm;
-    const hard = Math.max(-1, Math.min(1, x * drive * 0.6));
-    curve[i] = soft * (1 - shape) + hard * shape;
-  }
-  return curve;
+function curve(fn, n = 2048) {
+  const out = new Float32Array(n);
+  for (let i = 0; i < n; i++) out[i] = fn((i / (n - 1)) * 2 - 1);
+  return out;
 }
+
+// Fixed curves; drive comes from a gain in front (input past ±1 clamps to the ends).
+const SOFT_CURVE = curve((x) => Math.tanh(x * 3) / Math.tanh(3));
+const HARD_CURVE = curve((x) => Math.max(-1, Math.min(1, x * 1.6)));
 
 // Unity below the knee, tanh rounding above it. WaveShaper clamps input to
 // [-1, 1], so output can never exceed the curve's end value (~0.9).
@@ -36,13 +32,20 @@ export function softClipCurve(knee = 0.6, n = 2048) {
 }
 
 const makers = {
+  // drive -> soft and hard shapers -> crossfaded by `shape`
   dist(ctx) {
-    const shaper = ctx.createWaveShaper();
-    shaper.oversample = '2x';
+    const drive = ctx.createGain();
     const out = ctx.createGain();
     out.gain.value = 0.6;
-    shaper.connect(out);
-    return { in: shaper, out, shaper };
+    const mix = {};
+    for (const [name, c] of [['soft', SOFT_CURVE], ['hard', HARD_CURVE]]) {
+      const shaper = ctx.createWaveShaper();
+      shaper.curve = c;
+      shaper.oversample = '2x';
+      mix[name] = ctx.createGain();
+      drive.connect(shaper).connect(mix[name]).connect(out);
+    }
+    return { in: drive, out, drive, mix };
   },
   comp(ctx) {
     const comp = ctx.createDynamicsCompressor();
@@ -53,13 +56,13 @@ const makers = {
   },
   pcf(ctx) {
     const filter = ctx.createBiquadFilter();
-    filter.Q.value = 6;
+    filter.frequency.value = 1000;
     return { in: filter, out: filter, filter };
   },
 };
 
-// One instance of each effect per channel, crossfaded in/out. Only the targeted
-// channel gets wet signal, which makes retargeting click-free.
+// One instance of each effect per channel, crossfaded in/out, so routing
+// changes (including automated ones) are click-free.
 export class InsertChain {
   constructor(ctx, input, output) {
     this.stages = {};
@@ -80,27 +83,18 @@ export class InsertChain {
   }
 }
 
-// Tempo-synced ping-pong delay; `width` blends mono echoes to full L/R.
+// Mono tempo-synced echo with a darkening feedback loop, panned into the mix.
 export function createDelay(ctx) {
   const input = ctx.createGain();
-  const out = ctx.createGain();
-  const dl = ctx.createDelay(4);
-  const dr = ctx.createDelay(4);
-  const fb1 = ctx.createGain();
-  const fb2 = ctx.createGain();
+  const delay = ctx.createDelay(12);
+  const feedback = ctx.createGain();
   const tone = ctx.createBiquadFilter();
   tone.type = 'lowpass';
-  tone.frequency.value = 4500;
-  input.connect(dl);
-  dl.connect(fb1).connect(dr);
-  dr.connect(fb2).connect(tone).connect(dl);
-
-  const merger = ctx.createChannelMerger(2);
-  const mix = {};
-  for (const [name, src, ch] of [['lA', dl, 0], ['lB', dr, 0], ['rA', dr, 1], ['rB', dl, 1]]) {
-    mix[name] = ctx.createGain();
-    src.connect(mix[name]).connect(merger, 0, ch);
-  }
-  merger.connect(out);
-  return { in: input, out, dl, dr, fb1, fb2, mix };
+  tone.frequency.value = 5000;
+  const pan = ctx.createStereoPanner();
+  const out = ctx.createGain();
+  input.connect(delay);
+  delay.connect(tone).connect(feedback).connect(delay);
+  delay.connect(pan).connect(out);
+  return { in: input, out, delay, feedback, pan };
 }

@@ -19,6 +19,7 @@ export const C = {
   lcdGreen: ['#060d07', '#0b170c'],
   lcdGreenOn: '#79ff63',
   lcdGreenDim: '#2f6a28',
+  lcdGreenMid: '#5fbf52',
 
   transport: ['#33363d', '#1c1e23'],
   btnDark: ['#56595f', '#2a2c31'],

@@ -1,6 +1,7 @@
+import { HIT } from '../../state.js';
 import { hits } from '../../ui/hits.js';
 import { click, paintSteps, toggle } from '../../ui/handlers.js';
-import { Knob, PatternSelector } from '../controls.js';
+import { drawPatternTools, Knob, PatternSelector } from '../controls.js';
 import { brushed, button, led, line, panel, rrect, screws, shade, text, textWidth, vgrad } from '../primitives.js';
 import { C, KNOB, SELECTOR } from '../theme.js';
 
@@ -10,12 +11,12 @@ const STEP_X = 214;
 const GROUP_LABEL = { size: 6.3, weight: 800, spacing: 0.3 };
 
 export class DrumMachine {
-  constructor(state, x, y, w, h, cfg) {
-    Object.assign(this, { state, x, y, w, h, cfg, id: cfg.id });
+  constructor(state, app, x, y, w, h, cfg) {
+    Object.assign(this, { state, app, x, y, w, h, cfg, id: cfg.id });
     this.knobs = [];
-    state.define(`${cfg.id}.shuffle`, 0);
+    state.define(`${cfg.id}.on`, 1);
     this.groups = this.layoutGroups();
-    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: 136, w: 176, theme: cfg.selector, getDevice: () => state.drums[cfg.id] });
+    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: 136, w: 176, theme: cfg.selector, state });
   }
 
   // Spreads instrument groups across the panel; each group is a small knob grid.
@@ -87,12 +88,12 @@ export class DrumMachine {
       ctx.fillRect(x, 6, 10, 6);
       x += 12;
     }
-    text(ctx, cfg.subtitle, x + 6, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 1.2 });
-
-    const shuffle = state.get(`${cfg.id}.shuffle`) >= 0.5;
-    led(ctx, w - 62, 9, 2.3, shuffle, t.led);
-    text(ctx, 'SHUFFLE', w - 56, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 0.8 });
-    hits.rect(ctx, w - 67, 2, 60, 14, toggle(state, `${cfg.id}.shuffle`));
+    const onParam = `${cfg.id}.on`;
+    led(ctx, x + 6, 9, 2.3, state.on01(onParam), C.ledGreen);
+    text(ctx, 'ON', x + 12, 9.5, { size: 6, align: 'left', color: C.inkMuted });
+    hits.rect(ctx, x + 1, 2, 26, 14, toggle(state, onParam));
+    text(ctx, cfg.subtitle, x + 34, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 1.2 });
+    drawPatternTools(ctx, { state, id: cfg.id, right: w - 10, led: t.led });
   }
 
   drawGroups(ctx) {
@@ -106,6 +107,7 @@ export class DrumMachine {
       const pick = () => {
         const at = g.tracks.indexOf(dev.selected);
         dev.selected = g.tracks[(at + 1) % g.tracks.length];
+        this.app.engine.auditionDrum(cfg.id, dev.selected);
       };
       hits.rect(ctx, g.x, 21, g.w, 12, click(pick));
       if (g.tracks.includes(selected)) {
@@ -130,17 +132,25 @@ export class DrumMachine {
     const { w, cfg, state } = this;
     const t = cfg.theme;
     const dev = state.drums[cfg.id];
+    const pattern = state.pattern(cfg.id);
     const track = state.drumTrack(cfg.id, dev.selected);
     const stepW = (w - 18 - STEP_X) / 16;
     const bw = stepW - 6;
+    const playhead = state.transport.playing ? (state.transport.positions[cfg.id] ?? -1) : -1;
+    const hint = cfg.id === 'r909' ? '   SHIFT-CLICK: SOFT / NORMAL / FLAM' : '';
 
-    text(ctx, `\u25B8 ${cfg.trackNames[dev.selected]}`, STEP_X + 3, 131, { size: 6.5, weight: 800, align: 'left', color: t.bottomInk, spacing: 0.6 });
+    text(ctx, `\u25B8 ${cfg.trackNames[dev.selected]}${hint}`, STEP_X + 3, 131, { size: 6.5, weight: 800, align: 'left', color: t.bottomInk, spacing: 0.6 });
 
     for (let i = 0; i < 16; i++) {
       const cx = STEP_X + i * stepW + stepW / 2;
       const group = Math.floor(i / 4);
-      const playing = state.transport.step === i;
-      led(ctx, cx, 141, 2.8, track[i] || playing, playing && !track[i] ? C.inkLight : t.led);
+      const playing = playhead === i;
+      const hit = track[i];
+      if (i >= pattern.length) ctx.globalAlpha = 0.3;
+      if (hit === HIT.soft && cfg.id === 'r909') ctx.globalAlpha *= 0.5;
+      led(ctx, cx, 141, 2.8, hit > 0 || playing, playing && !hit ? C.inkLight : t.led);
+      if (hit === HIT.soft && cfg.id === 'r909') ctx.globalAlpha *= 2;
+      if (hit === HIT.flam) led(ctx, cx + 7, 141, 1.8, true, t.led);
       const face = t.stepFaces[group];
       const off = button(ctx, cx - bw / 2, 149, bw, 26, { face: [shade(face, 0.22), face, shade(face, -0.18)], pressed: playing, radius: 2.5 });
       if (playing) {
@@ -149,16 +159,10 @@ export class DrumMachine {
         ctx.fill();
       }
       text(ctx, String(i + 1), cx, 184, { size: 6.5, weight: 800, color: t.bottomInk });
+      ctx.globalAlpha = 1;
     }
 
-    hits.rect(
-      ctx,
-      STEP_X,
-      134,
-      16 * stepW,
-      44,
-      paintSteps({ x0: STEP_X, stepW, get: (i) => track[i], set: (i, v) => (track[i] = v) }),
-    );
+    hits.rect(ctx, STEP_X, 134, 16 * stepW, 44, this.stepHandler(track, stepW));
 
     ctx.lineWidth = 1.2;
     for (let g = 0; g < 4; g++) {
@@ -167,6 +171,22 @@ export class DrumMachine {
       ctx.strokeStyle = t.groupLine[g % t.groupLine.length];
       line(ctx, x0, 192, x1, 192);
     }
+  }
+
+  // Click/drag paints hits on/off; on the 909, shift-click cycles soft → normal → flam → off.
+  stepHandler(track, stepW) {
+    const is909 = this.cfg.id === 'r909';
+    const on = is909 ? HIT.normal : 1;
+    const paint = paintSteps({ x0: STEP_X, stepW, get: (i) => track[i] > 0, set: (i, v) => (track[i] = v ? on : 0) });
+    return {
+      ...paint,
+      down: (ev) => {
+        if (!is909 || !ev.fine) return paint.down(ev);
+        const i = Math.floor((ev.p.x - STEP_X) / stepW);
+        if (i >= 0 && i < track.length) track[i] = (track[i] + 1) % 4;
+        return {};
+      },
+    };
   }
 }
 
@@ -252,8 +272,8 @@ export const R909 = {
     { id: 'ht', label: 'HI TOM', tracks: ['ht'], knobs: [['tune', 'TUNE', 0.5], ['decay', 'DECAY', 0.5], ['level', 'LEVEL', 0.6]] },
     { id: 'rs', label: 'RIM', tracks: ['rs'], knobs: [['level', 'LEVEL', 0.6]] },
     { id: 'cp', label: 'CLAP', tracks: ['cp'], knobs: [['level', 'LEVEL', 0.7]] },
-    { id: 'hh', label: 'HI-HAT', tracks: ['ch', 'oh'], knobs: [['chLevel', 'CH LVL', 0.7], ['chDecay', 'CH DEC', 0.3], ['ohLevel', 'OH LVL', 0.6], ['ohDecay', 'OH DEC', 0.5]] },
+    { id: 'hh', label: 'HI-HAT', tracks: ['ch', 'oh'], knobs: [['level', 'LEVEL', 0.7], ['chDecay', 'CH DEC', 0.3], ['ohDecay', 'OH DEC', 0.5]] },
     { id: 'cy', label: 'CYMBAL', tracks: ['cr', 'rd'], knobs: [['crLevel', 'CRASH', 0.5], ['crTune', 'C TUNE', 0.5], ['rdLevel', 'RIDE', 0.5], ['rdTune', 'R TUNE', 0.5]] },
-    { id: 'ac', label: 'ACCENT', tracks: ['ac'], knobs: [['level', 'LEVEL', 0.6]] },
+    { id: 'ac', label: 'ACCENT', tracks: ['ac'], knobs: [['level', 'LEVEL', 0.6], ['flam', 'FLAM', 0.3]] },
   ],
 };

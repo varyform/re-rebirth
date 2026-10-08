@@ -6,5 +6,8 @@ export const CHANNELS = [
   ['r909', 'DRUM 09'],
 ];
 
-// Insert-effect routing targets, as shown on the target readouts.
-export const TARGETS = [...CHANNELS.map(([, label]) => label), 'MASTER'];
+const LABELS = CHANNELS.map(([, label]) => label);
+
+// Routing choices for the single-instance effects, stored as choice params.
+export const COMP_TARGETS = ['MASTER', ...LABELS];
+export const PCF_TARGETS = ['OFF', ...LABELS];

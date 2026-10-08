@@ -1,6 +1,6 @@
 import { hits } from '../../ui/hits.js';
 import { click, paintSteps, scrubSteps, toggle } from '../../ui/handlers.js';
-import { Knob, PatternSelector } from '../controls.js';
+import { drawPatternTools, Knob, PatternSelector } from '../controls.js';
 import { brushed, button, circle, icon, keyboardKeys, led, line, miniKeyboard, MONO, panel, rrect, screws, text, textWidth, vgrad, waveIcon } from '../primitives.js';
 import { C, KNOB, SELECTOR } from '../theme.js';
 
@@ -31,18 +31,18 @@ const EDIT_BUTTONS = [
 const NEXT_OCTAVE = { 0: 1, 1: -1, '-1': 0 };
 
 export class Bassline {
-  constructor(state, x, y, w, h, { id, number }) {
-    Object.assign(this, { state, x, y, w, h, id, number });
+  constructor(state, app, x, y, w, h, { id, number }) {
+    Object.assign(this, { state, app, x, y, w, h, id, number });
     const P = (k) => `${id}.${k}`;
     this.waveParam = P('waveform');
-    this.shuffleParam = P('shuffle');
+    this.onParam = P('on');
     state.define(this.waveParam, 0);
-    state.define(this.shuffleParam, 0);
+    state.define(this.onParam, 1);
     this.knobs = KNOBS.map(([k, label, def], i) => {
       state.define(P(k), def);
       return new Knob({ x: 102 + i * 60, y: 62, r: 15, param: P(k), label, labelPos: 'above', style: KNOB.bass, labelColor: C.bassInk, labelSize: 6.5 });
     });
-    this.selector = new PatternSelector({ id, x: 516, y: 32, w: 236, theme: SELECTOR.bass, getDevice: () => state.bass[id] });
+    this.selector = new PatternSelector({ id, x: 516, y: 32, w: 236, theme: SELECTOR.bass, state });
   }
 
   draw(ctx) {
@@ -75,12 +75,11 @@ export class Bassline {
     ctx.fillStyle = C.bassAccent;
     ctx.fill();
     text(ctx, String(number), tx + 6.5, 9.5, { size: 8, weight: 900, color: C.bassInk });
-    text(ctx, 'ANALOG BASS SYNTHESIZER \u00B7 16 STEP SEQUENCER', tx + 22, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 1.2 });
-
-    const shuffle = state.get(this.shuffleParam) >= 0.5;
-    led(ctx, w - 62, 9, 2.3, shuffle, C.ledRed);
-    text(ctx, 'SHUFFLE', w - 56, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 0.8 });
-    hits.rect(ctx, w - 67, 2, 60, 14, toggle(state, this.shuffleParam));
+    led(ctx, tx + 24, 9, 2.3, state.on01(this.onParam), C.ledGreen);
+    text(ctx, 'ON', tx + 30, 9.5, { size: 6, align: 'left', color: C.inkMuted });
+    hits.rect(ctx, tx + 19, 2, 26, 14, toggle(state, this.onParam));
+    text(ctx, 'ANALOG BASS SYNTHESIZER', tx + 52, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 1.2 });
+    drawPatternTools(ctx, { state, id: this.id, right: w - 10, led: C.ledRed });
   }
 
   drawWaveSwitch(ctx, cx, cy) {
@@ -111,13 +110,18 @@ export class Bassline {
   drawSequencer(ctx) {
     const { state, id } = this;
     const dev = state.bass[id];
-    const pattern = state.bassPattern(id);
-    const sel = pattern[dev.selectedStep];
+    const pattern = state.pattern(id);
+    const steps = pattern.steps;
+    const sel = steps[dev.selectedStep];
+    const audition = () => this.app.engine.auditionBass(id, sel);
 
     // Keys enter a note on the selected step; black keys register last so they win.
     miniKeyboard(ctx, ...KEYBOARD, { active: sel.gate ? sel.note : -1 });
     for (const k of keyboardKeys(...KEYBOARD)) {
-      hits.rect(ctx, k.x, k.y, k.w, k.h, click(() => Object.assign(sel, { note: k.note, gate: true })));
+      hits.rect(ctx, k.x, k.y, k.w, k.h, click(() => {
+        Object.assign(sel, { note: k.note, gate: true });
+        audition();
+      }));
     }
 
     for (const [label, bx, by, isOn, apply] of EDIT_BUTTONS) {
@@ -142,8 +146,12 @@ export class Bassline {
       line(ctx, gx, 103, gx, 172);
     }
 
-    pattern.forEach((s, i) => {
+    const t = state.transport;
+    const playhead = t.playing ? (t.positions[id] ?? -1) : -1;
+    steps.forEach((s, i) => {
       const cx = GRID_X + i * STEP_W + STEP_W / 2;
+      // Steps past the pattern length don't play: dim them.
+      if (i >= pattern.length) ctx.globalAlpha = 0.3;
       if (i === dev.selectedStep) {
         rrect(ctx, cx - 12.5, 101.5, 25, 73, 2.5);
         ctx.fillStyle = 'rgba(255,106,26,0.12)';
@@ -167,12 +175,13 @@ export class Bassline {
       led(ctx, cx, ROW.acc, 2.5, s.accent, C.ledOrange);
       led(ctx, cx, ROW.slide, 2.5, s.slide, C.ledGreen);
 
-      const playing = state.transport.step === i;
+      const playing = playhead === i;
       const off = button(ctx, cx - 11, ROW.pad, 22, 14, { face: playing ? C.bassPadOn : C.bassPad, pressed: playing });
       text(ctx, String(i + 1), cx, ROW.pad + 7.5 + off, { size: 6.5, weight: 800, color: playing ? C.bassInk : C.inkLight });
+      ctx.globalAlpha = 1;
     });
 
-    this.registerGrid(ctx, pattern, dev);
+    this.registerGrid(ctx, steps, dev);
   }
 
   // Note row toggles note/rest, OCT cycles up/down/none, ACC/SLIDE paint, pads select.
@@ -180,6 +189,11 @@ export class Bassline {
     const row = { x0: GRID_X, stepW: STEP_W };
     const width = 16 * STEP_W;
     const select = (i) => (dev.selectedStep = i);
+    const selectAndHear = (i) => {
+      if (dev.selectedStep === i) return;
+      select(i);
+      if (pattern[i].gate) this.app.engine.auditionBass(this.id, pattern[i]);
+    };
     const flag = (name) => ({ ...row, get: (i) => pattern[i][name], set: (i, v) => (pattern[i][name] = v) });
     hits.rect(ctx, GRID_X, 103, width, 16, paintSteps({ ...flag('gate'), after: select }));
     hits.rect(
@@ -195,6 +209,6 @@ export class Bassline {
     );
     hits.rect(ctx, GRID_X, ROW.acc - 5.5, width, 11, paintSteps(flag('accent')));
     hits.rect(ctx, GRID_X, ROW.slide - 5.5, width, 11, paintSteps(flag('slide')));
-    hits.rect(ctx, GRID_X, ROW.pad, width, 15, scrubSteps({ ...row, pick: select }));
+    hits.rect(ctx, GRID_X, ROW.pad, width, 15, scrubSteps({ ...row, pick: selectAndHear }));
   }
 }

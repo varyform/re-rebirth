@@ -2,21 +2,25 @@
 //
 // device -> channel in -> inserts (dist/comp/pcf) -> pan -> fader -> mute -> master
 //                                                          \-> delay send -> delay -> return -> master
-// master -> master inserts -> master fader -> volume -> safety limiter -> out
+// master -> master inserts -> master fader -> volume -> limiter -> soft clip -> out
 //
 // Knob values are pulled from state once per frame (`sync`) and applied with
 // short smoothing, so the UI never has to know about audio.
-import { CHANNELS } from '../channels.js';
-import { BASS_IDS, DRUM_IDS } from '../state.js';
+import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../channels.js';
+import { BASS_IDS, DRUM_IDS, HIT } from '../state.js';
 import { BassVoice } from './bass-voice.js';
 import { KITS } from './drums.js';
-import { createDelay, distortionCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
+import { createDelay, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
+import { PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent', 'volume', 'waveform'];
-const SHUFFLE = 0.33; // fraction of a step that off-beats are pushed late
+export const DELAY_STEPS = 32;
+const MAX_SWING = 0.42; // fraction of a step that off-beats move at full shuffle
 const METER_RANGE_DB = 48;
+const MAX_FILTER_HZ = 14000;
 
-const faderGain = (v) => (v / 0.75) ** 2;
+// Unity at the top: song files usually run channel faders near full.
+const faderGain = (v) => v * v;
 
 export class AudioEngine {
   constructor(state) {
@@ -43,14 +47,14 @@ export class AudioEngine {
     limiter.ratio.value = 20;
     limiter.attack.value = 0.002;
     limiter.release.value = 0.12;
+    // The compressor-limiter lets fast transients through; the soft clipper catches them.
+    const clipper = ctx.createWaveShaper();
+    clipper.curve = softClipCurve();
     this.volume = ctx.createGain();
     this.masterFader = ctx.createGain();
     this.masterBus = ctx.createGain();
     this.masterMeter = this.analyser();
     this.masterInserts = new InsertChain(ctx, this.masterBus, this.masterFader);
-    // The compressor-limiter lets fast transients through; the tanh stage catches them.
-    const clipper = ctx.createWaveShaper();
-    clipper.curve = softClipCurve();
     this.masterFader.connect(this.volume).connect(limiter).connect(clipper).connect(ctx.destination);
     clipper.connect(this.masterMeter);
 
@@ -96,17 +100,27 @@ export class AudioEngine {
     param.setTargetAtTime(value, this.ctx.currentTime, tau);
   };
 
-  chainFor(label) {
-    if (label === 'MASTER') return this.masterInserts;
-    return Object.values(this.channels).find((c) => c.label === label)?.inserts;
-  }
-
   bassParams(id) {
     return Object.fromEntries(BASS_KNOBS.map((k) => [k, this.state.get(`${id}.${k}`)]));
   }
 
   stepDuration() {
     return 60 / this.state.transport.tempo / 4;
+  }
+
+  // Index into CHANNELS for a routing choice, or -1 (off) / 'master'.
+  compChain() {
+    const { state } = this;
+    if (!state.on01('fx.comp.on')) return null;
+    const i = state.choice('fx.comp.target', COMP_TARGETS.length);
+    return i === 0 ? this.masterInserts : this.channels[CHANNELS[i - 1][0]].inserts;
+  }
+
+  pcfChain() {
+    const { state } = this;
+    if (!state.on01('fx.pcf.on')) return null;
+    const i = state.choice('fx.pcf.target', PCF_TARGETS.length);
+    return i === 0 ? null : this.channels[CHANNELS[i - 1][0]].inserts;
   }
 
   sync() {
@@ -116,28 +130,24 @@ export class AudioEngine {
 
     for (const id of BASS_IDS) this.bass[id].setParams(this.bassParams(id), set);
 
-    const anySolo = CHANNELS.some(([id]) => g(`mixer.${id}.solo`) >= 0.5);
+    const anySolo = CHANNELS.some(([id]) => state.on01(`mixer.${id}.solo`));
     for (const [id, ch] of Object.entries(this.channels)) {
       set(ch.pan.pan, (g(`mixer.${id}.pan`) - 0.5) * 2);
       set(ch.fader.gain, faderGain(g(`mixer.${id}.level`)));
       set(ch.send.gain, g(`mixer.${id}.delay`) ** 2);
-      const audible = g(`mixer.${id}.mute`) < 0.5 && (!anySolo || g(`mixer.${id}.solo`) >= 0.5);
+      const audible = state.on01(`${id}.on`) && !state.on01(`mixer.${id}.mute`) && (!anySolo || state.on01(`mixer.${id}.solo`));
       set(ch.mute.gain, audible ? 1 : 0, 0.005);
     }
     set(this.masterFader.gain, faderGain(g('mixer.master.level')));
     set(this.volume.gain, g('master.volume') ** 2 * 0.8);
 
     const d = this.delay;
-    const steps = 1 + Math.round(g('fx.delay.steps') * 7);
-    const time = Math.min(3.9, steps * this.stepDuration());
-    set(d.dl.delayTime, time, 0.05);
-    set(d.dr.delayTime, time, 0.05);
-    const fb = g('fx.delay.feedback') * 0.85;
-    set(d.fb1.gain, fb);
-    set(d.fb2.gain, fb);
-    const cross = 1 - g('fx.delay.pan');
-    set(d.mix.lB.gain, cross);
-    set(d.mix.rB.gain, cross);
+    set(d.in.gain, state.on01('fx.delay.on') ? 1 : 0, 0.01);
+    const steps = state.choice('fx.delay.steps', DELAY_STEPS) + 1;
+    const unit = this.stepDuration() * (state.on01('fx.delay.triplet') ? 2 / 3 : 1);
+    set(d.delay.delayTime, Math.min(11.9, steps * unit), 0.05);
+    set(d.feedback.gain, g('fx.delay.feedback') * 0.85);
+    set(d.pan.pan, (g('fx.delay.pan') - 0.5) * 2);
     set(this.delayReturn.gain, g('mixer.delayReturn') * 1.2);
 
     this.syncInserts();
@@ -147,12 +157,15 @@ export class AudioEngine {
     const { state, set } = this;
     const g = (k) => state.get(k);
     const chains = [...Object.values(this.channels).map((c) => c.inserts), this.masterInserts];
-    const targets = { dist: state.fx.distTarget, comp: state.fx.compTarget, pcf: state.fx.pcfTarget };
-
+    const distOn = state.on01('fx.dist.on');
+    const active = {
+      dist: new Set(distOn ? CHANNELS.filter(([id]) => state.on01(`mixer.${id}.dist`)).map(([id]) => this.channels[id].inserts) : []),
+      comp: new Set([this.compChain()].filter(Boolean)),
+      pcf: new Set([this.pcfChain()].filter(Boolean)),
+    };
     for (const key of INSERTS) {
-      const active = g(`fx.${key}.on`) >= 0.5 ? this.chainFor(targets[key]) : null;
       for (const chain of chains) {
-        const on = chain === active;
+        const on = active[key].has(chain);
         set(chain.stages[key].wet.gain, on ? 1 : 0, 0.01);
         set(chain.stages[key].dry.gain, on ? 0 : 1, 0.01);
       }
@@ -160,71 +173,114 @@ export class AudioEngine {
 
     const amount = g('fx.dist.amount');
     const shape = g('fx.dist.shape');
-    const curveKey = `${amount.toFixed(3)}:${shape.toFixed(3)}`;
-    if (curveKey !== this.curveKey) {
-      this.curveKey = curveKey;
-      const curve = distortionCurve(amount, shape);
-      for (const chain of chains) chain.stages.dist.fx.shaper.curve = curve;
-    }
+    const drive = 0.3 + amount * amount * 12;
 
     const ca = g('fx.comp.amount');
-    const speed = g('fx.comp.speed');
-    const type = PCF_TYPES[Math.round(g('fx.pcf.mode') * (PCF_TYPES.length - 1))];
+    const type = PCF_TYPES[state.on01('fx.pcf.mode') ? 1 : 0];
+    const reso = g('fx.pcf.reso');
     for (const chain of chains) {
+      const dist = chain.stages.dist.fx;
+      set(dist.drive.gain, drive);
+      set(dist.mix.soft.gain, 1 - shape);
+      set(dist.mix.hard.gain, shape);
       const { comp, makeup } = chain.stages.comp.fx;
-      set(comp.threshold, -ca * 40);
-      set(comp.ratio, 2 + ca * 10);
-      set(comp.attack, 0.001 + (1 - speed) * 0.05);
-      set(comp.release, 0.04 + (1 - speed) * 0.5);
-      set(makeup.gain, 1 + ca * 1.5);
+      set(comp.threshold, -g('fx.comp.threshold') * 40);
+      set(comp.ratio, 1 + ca * 11);
+      set(comp.attack, 0.004);
+      set(comp.release, 0.15);
+      set(makeup.gain, 1 + ca * 1.2);
       const filter = chain.stages.pcf.fx.filter;
       if (filter.type !== type) filter.type = type;
+      // Q is in dB for lowpass, linear for bandpass.
+      set(filter.Q, type === 'lowpass' ? reso * 18 : 0.7 + reso * 9);
     }
   }
 
-  playStep(step, time, stepDur) {
+  // positions: { deviceId: step index within its current pattern }
+  playStep(positions, time, stepDur) {
     const { state } = this;
     this.sync();
-    const late = (id) => (step % 2 && state.get(`${id}.shuffle`) >= 0.5 ? stepDur * SHUFFLE : 0);
-
     for (const id of BASS_IDS) {
-      const pattern = state.bassPattern(id);
-      this.bass[id].step(pattern[step], pattern[(step + 1) % 16], time + late(id), stepDur, this.bassParams(id));
-    }
-
-    for (const id of DRUM_IDS) {
-      const t = time + late(id);
-      const accented = state.drumTrack(id, 'ac')[step];
-      const acc = accented ? 1 + state.get(`${id}.ac.level`) * 0.8 : 1;
-      const v = { ctx: this.ctx, out: this.channels[id].input, noise: this.noise, kit: this.kits[id], t, acc };
-      for (const [track, [group, voice]] of Object.entries(KITS[id])) {
-        if (!state.drumTrack(id, track)[step]) continue;
-        voice(v, (k) => state.get(`${id}.${group}.${k}`));
+      const pattern = state.pattern(id);
+      const pos = positions[id];
+      const t = time + this.swing(pattern, pos, stepDur);
+      if (!state.on01(`${id}.on`)) {
+        this.bass[id].release(t);
+        continue;
       }
+      const next = pattern.steps[(pos + 1) % pattern.length];
+      this.bass[id].step(pattern.steps[pos], next, t, stepDur, this.bassParams(id));
     }
-
-    this.pcfStep(step, time, stepDur);
+    for (const id of DRUM_IDS) {
+      if (!state.on01(`${id}.on`)) continue;
+      const pattern = state.pattern(id);
+      const pos = positions[id];
+      this.playDrums(id, pattern, pos, time + this.swing(pattern, pos, stepDur));
+    }
+    this.pcfStep(positions, time, stepDur);
   }
 
-  // Pattern-controlled filter: each step kicks the cutoff, which then decays.
-  pcfStep(step, time, stepDur) {
+  swing(pattern, pos, stepDur) {
+    return pattern.shuffle && pos % 2 ? stepDur * MAX_SWING * this.state.get('song.shuffle') : 0;
+  }
+
+  playDrums(id, pattern, pos, t, only = null) {
     const { state } = this;
-    const chain = this.chainFor(state.fx.pcfTarget);
-    if (!chain || state.get('fx.pcf.on') < 0.5) return;
+    const accent = state.drumTrack(id, 'ac', pattern)[pos] ? 1 + state.get(`${id}.ac.level`) * 0.8 : 1;
+    for (const [track, [group, voice]] of Object.entries(KITS[id])) {
+      if (only && track !== only) continue;
+      const hit = only ? HIT.normal : state.drumTrack(id, track, pattern)[pos];
+      if (!hit) continue;
+      // The 909 stores soft/normal/flam per step; the 808 only on/off.
+      const soft = id === 'r909' && hit === HIT.soft ? 0.55 : 1;
+      const P = (k) => state.get(`${id}.${group}.${k}`);
+      const v = { ctx: this.ctx, out: this.channels[id].input, noise: this.noise, kit: this.kits[id], t, acc: accent * soft };
+      if (id === 'r909' && hit === HIT.flam) {
+        voice({ ...v, acc: v.acc * 0.5 }, P);
+        v.t += 0.006 + state.get('r909.ac.flam') * 0.03;
+      }
+      voice(v, P);
+    }
+  }
+
+  // Pattern-controlled filter: the wave sets a cutoff kick per step, which decays.
+  pcfStep(positions, time, stepDur) {
+    const { state } = this;
+    const chain = this.pcfChain();
+    if (!chain) return;
+    const target = CHANNELS[state.choice('fx.pcf.target', PCF_TARGETS.length) - 1][0];
+    const wave = PCF_WAVES[state.choice('fx.pcf.wave', PCF_WAVE_COUNT)];
+    const value = wave[positions[target] ?? 0];
+    const base = Math.min(MAX_FILTER_HZ, 50 * 2 ** (state.get('fx.pcf.freq') * 8));
+    const peak = Math.min(MAX_FILTER_HZ, base * 2 ** (value * state.get('fx.pcf.amount') * 6));
+    const decay = stepDur * (0.2 + state.get('fx.pcf.decay') * 4);
     const f = chain.stages.pcf.fx.filter.frequency;
-    const level = state.get('fx.pcf.level');
-    const floor = 120;
-    const peak = Math.min(14000, floor * 2 ** (state.fx.pcf[step] * level * 7.5));
-    const decay = stepDur * (0.3 + state.get('fx.pcf.decay') * 6);
     f.cancelScheduledValues(time);
     f.setValueAtTime(peak, time);
-    f.setTargetAtTime(floor, time + 0.002, decay / 3);
+    f.setTargetAtTime(base, time + 0.002, decay / 3);
   }
 
   stop() {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     for (const voice of Object.values(this.bass)) voice.release(t);
+  }
+
+  // Preview while editing: one bass step, or one drum voice.
+  auditionBass(id, step) {
+    this.start();
+    if (this.state.transport.playing) return;
+    const t = this.ctx.currentTime + 0.01;
+    this.sync();
+    this.bass[id].sliding = false;
+    this.bass[id].step(step, { gate: false }, t, Math.min(0.3, this.stepDuration() * 2), this.bassParams(id));
+  }
+
+  auditionDrum(id, track) {
+    this.start();
+    if (this.state.transport.playing) return;
+    this.sync();
+    this.playDrums(id, this.state.pattern(id), 0, this.ctx.currentTime + 0.01, track);
   }
 
   // Peak meters with falloff. Returns true when any meter visibly moved.

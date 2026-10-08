@@ -15,22 +15,23 @@ const EFFECTS_W = 300;
 export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + EFFECTS_W;
 
 export class Rack {
-  constructor(state, clock) {
+  // app: { clock, engine, files }
+  constructor(state, app) {
     this.state = state;
     this.devices = [];
     const x = RAIL_W;
     let y = MARGIN;
 
-    this.devices.push(new Transport(state, clock, x, y, RACK_W - RAIL_W * 2, 80));
+    this.devices.push(new Transport(state, app, x, y, RACK_W - RAIL_W * 2, 80));
     y += 80 + GAP;
 
     const top = y;
     const bands = [];
     const instruments = [
-      [(...r) => new Bassline(state, ...r, { id: 'bass1', number: 1 }), 176],
-      [(...r) => new Bassline(state, ...r, { id: 'bass2', number: 2 }), 176],
-      [(...r) => new DrumMachine(state, ...r, R808), 206],
-      [(...r) => new DrumMachine(state, ...r, R909), 206],
+      [(...r) => new Bassline(state, app, ...r, { id: 'bass1', number: 1 }), 176],
+      [(...r) => new Bassline(state, app, ...r, { id: 'bass2', number: 2 }), 176],
+      [(...r) => new DrumMachine(state, app, ...r, R808), 206],
+      [(...r) => new DrumMachine(state, app, ...r, R909), 206],
     ];
     for (const [make, h] of instruments) {
       this.devices.push(make(x, y, INSTRUMENT_W, h));

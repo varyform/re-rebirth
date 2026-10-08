@@ -1,7 +1,9 @@
 import './style.css';
 import { AudioEngine } from './audio/engine.js';
+import { loadDemo } from './demo.js';
 import { Rack } from './render/rack.js';
 import { Clock } from './sequencer/clock.js';
+import { Files } from './song/files.js';
 import { State } from './state.js';
 import { hits } from './ui/hits.js';
 import { attachPointer } from './ui/pointer.js';
@@ -11,12 +13,33 @@ const ctx = canvas.getContext('2d');
 const state = new State();
 const engine = new AudioEngine(state);
 const clock = new Clock(state, engine);
-const rack = new Rack(state, clock);
+const files = new Files(state, {
+  beforeLoad: () => clock.t.playing && clock.stop(),
+  onLoaded: () => {
+    notify(state.info.title || state.info.file || 'Loaded');
+    requestRender();
+  },
+  onError: (err, file) => {
+    console.error(err);
+    notify(`Can't open ${file?.name ?? 'file'}: ${err.message}`);
+  },
+});
+const app = { clock, engine, files };
+// Controls register their parameter defaults here, so build the rack before loading.
+const rack = new Rack(state, app);
+
+if (!files.restore()) loadDemo(state);
 
 let frame = 0;
 
 function requestRender() {
   if (!frame) frame = requestAnimationFrame(render);
+}
+
+function notify(message) {
+  state.notice = { text: message.toUpperCase(), until: performance.now() + 4000 };
+  setTimeout(requestRender, 4100);
+  requestRender();
 }
 
 function render() {
@@ -69,7 +92,12 @@ window.addEventListener('keydown', (e) => {
   requestRender();
 });
 
-attachPointer(canvas, requestRender);
+// Every user edit goes through the pointer; autosave is debounced.
+attachPointer(canvas, () => {
+  requestRender();
+  files.autosave();
+});
+files.acceptDrops(window);
 window.addEventListener('resize', resize);
 watchPixelRatio();
 resize();
