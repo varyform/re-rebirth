@@ -9,7 +9,8 @@ export const DEVICE_IDS = [...BASS_IDS, ...DRUM_IDS];
 // Drum step values, as stored in ReBirth songs.
 export const HIT = { off: 0, soft: 1, normal: 2, flam: 3 };
 
-export const emptyBassStep = () => ({ note: 0, octave: 0, accent: false, slide: false, gate: false });
+// tie: sustain the previous (slid) note through this step instead of playing a new one.
+export const emptyBassStep = () => ({ note: 0, octave: 0, accent: false, slide: false, gate: false, tie: false });
 export const emptyBassPattern = () => ({ length: STEPS, shuffle: false, steps: Array.from({ length: STEPS }, emptyBassStep) });
 export const emptyDrumPattern = () => ({ length: STEPS, shuffle: false, tracks: {} });
 

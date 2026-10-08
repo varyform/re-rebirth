@@ -188,7 +188,9 @@ function readEffects(r, dev, find, P) {
   }
 }
 
-// 303 step flags: bit0 slide, bit1 accent, bit2 up, bit3 down, bit4 rest.
+// 303 step flags: bit0 slide, bit1 accent, bit2 up, bit3 down, bit4 pause.
+// A pause right after a slide is a tie: the slid note sustains through it.
+// Fitted per step against a ReBirth recording (bit 4 almost always follows a slide).
 function readBass(r, c, id, P) {
   const o = c.at;
   P[`${id}.on`] = r.u8(o) ? 1 : 0;
@@ -199,10 +201,12 @@ function readBass(r, c, id, P) {
     const pattern = emptyBassPattern();
     pattern.shuffle = !!r.u8(base);
     pattern.length = clampLength(r.u8(base + 1));
-    pattern.steps = Array.from({ length: STEPS }, (_, s) => {
+    const flags = Array.from({ length: STEPS }, (_, s) => r.u8(base + 3 + s * 2));
+    pattern.steps = flags.map((f, s) => {
       const note = Math.min(12, r.u8(base + 2 + s * 2));
-      const f = r.u8(base + 3 + s * 2);
-      return { note, octave: f & 4 ? 1 : f & 8 ? -1 : 0, accent: !!(f & 2), slide: !!(f & 1), gate: !(f & 0x10) };
+      const prevSlide = !!(flags[(s + pattern.length - 1) % pattern.length] & 1);
+      const tie = !!(f & 0x10) && prevSlide;
+      return { note, octave: f & 4 ? 1 : f & 8 ? -1 : 0, accent: !!(f & 2), slide: !!(f & 1), gate: !(f & 0x10) || tie, tie };
     });
     return pattern;
   });

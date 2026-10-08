@@ -119,7 +119,7 @@ export class Bassline {
     miniKeyboard(ctx, ...KEYBOARD, { active: sel.gate ? sel.note : -1 });
     for (const k of keyboardKeys(...KEYBOARD)) {
       hits.rect(ctx, k.x, k.y, k.w, k.h, click(() => {
-        Object.assign(sel, { note: k.note, gate: true });
+        Object.assign(sel, { note: k.note, gate: true, tie: false });
         audition();
       }));
     }
@@ -165,7 +165,8 @@ export class Bassline {
       ctx.fillStyle = C.bassCell;
       ctx.fill();
       const noteColor = !s.gate ? C.bassNoteOff : s.accent ? C.bassNoteAccent : C.bassNote;
-      text(ctx, s.gate ? NOTE_NAMES[s.note] : '\u2013', cx, ROW.note + 0.5, { size: 7.5, weight: 700, family: MONO, color: noteColor });
+      const label = !s.gate ? '\u2013' : s.tie ? '\u2040' : NOTE_NAMES[s.note]; // ⁀ = tie
+      text(ctx, label, cx, ROW.note + 0.5, { size: 7.5, weight: 700, family: MONO, color: noteColor });
 
       if (s.octave) icon(ctx, s.octave > 0 ? 'up' : 'down', cx, ROW.oct, 7, s.gate ? C.bassNote : C.bassNoteOff);
       else {
@@ -195,7 +196,8 @@ export class Bassline {
       if (pattern[i].gate) this.app.engine.auditionBass(this.id, pattern[i]);
     };
     const flag = (name) => ({ ...row, get: (i) => pattern[i][name], set: (i, v) => (pattern[i][name] = v) });
-    hits.rect(ctx, GRID_X, 103, width, 16, paintSteps({ ...flag('gate'), after: select }));
+    const gate = { ...row, get: (i) => pattern[i].gate && !pattern[i].tie, set: (i, v) => Object.assign(pattern[i], { gate: v, tie: false }) };
+    hits.rect(ctx, GRID_X, 103, width, 16, paintSteps({ ...gate, after: select }));
     hits.rect(
       ctx,
       GRID_X,

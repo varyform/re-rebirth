@@ -27,7 +27,7 @@ function bassPattern(p) {
   out.shuffle = !!p.shuffle;
   out.steps = Array.from({ length: STEPS }, (_, i) => {
     const s = p.steps?.[i] ?? emptyBassStep();
-    return { note: num(s.note, 0, 12, 0), octave: num(s.octave, -1, 1, 0), accent: !!s.accent, slide: !!s.slide, gate: !!s.gate };
+    return { note: num(s.note, 0, 12, 0), octave: num(s.octave, -1, 1, 0), accent: !!s.accent, slide: !!s.slide, gate: !!s.gate, tie: !!s.tie };
   });
   return out;
 }

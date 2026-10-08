@@ -63,14 +63,14 @@ function metal(v, scale, dur) {
   return sum;
 }
 
-function kick(v, { base, sweep, sweepTime, decay, level, click }) {
+function kick(v, { base, sweep, sweepTime, decay, level, click, clickHz = 3500 }) {
   const o = osc(v, 'sine', base * sweep);
   o.frequency.exponentialRampToValueAtTime(base, v.t + sweepTime);
   chain(o, env(v, level, decay, 0.001), v.out);
   run(v, o, decay + 0.05);
   if (click > 0) {
     const n = noise(v);
-    chain(n, filter(v, 'lowpass', 3500), env(v, level * click, 0.012, 0.0005), v.out);
+    chain(n, filter(v, 'lowpass', clickHz), env(v, level * click, 0.012, 0.0005), v.out);
     run(v, n, 0.03);
   }
 }
@@ -108,7 +108,7 @@ function rim(v, level, bright = 1) {
 }
 
 // Several rapid noise bursts then a diffuse tail.
-function clap(v, level, hz, tail) {
+function clap(v, level, hz, tail, q = 1.6) {
   const n = noise(v);
   const g = v.ctx.createGain();
   const p = g.gain;
@@ -120,7 +120,7 @@ function clap(v, level, hz, tail) {
   }
   p.setValueAtTime(level * 0.8, v.t + 0.033);
   p.setTargetAtTime(0, v.t + 0.034, tail * T60);
-  chain(n, filter(v, 'bandpass', hz, 1.6), filter(v, 'highpass', 600), g, v.out);
+  chain(n, filter(v, 'bandpass', hz, q), filter(v, 'highpass', 600), g, v.out);
   run(v, n, 0.04 + tail);
 }
 
@@ -182,7 +182,8 @@ const R808 = {
 
 const R909 = {
   // Fundamental measured at ~67 Hz with tune at max.
-  bd: ['bd', (v, P) => kick(v, { base: 52 + P('tune') * 15, sweep: 2 + P('tune') * 4, sweepTime: 0.03, decay: 0.2 + P('decay') * 0.8, level: lvl(P('level')) * v.acc * 1.4, click: 0.15 + P('attack') * 0.8 })],
+  // Measured against ReBirth: even at attack 0 the kick has a strong 1-5 kHz click.
+  bd: ['bd', (v, P) => kick(v, { base: 52 + P('tune') * 15, sweep: 2 + P('tune') * 4, sweepTime: 0.03, decay: 0.2 + P('decay') * 0.8, level: lvl(P('level')) * v.acc * 1.4, click: 0.7 + P('attack') * 0.8, clickHz: 7000 })],
   sd: ['sd', (v, P) => {
     const k = 0.8 + P('tune') * 0.6;
     snare(v, { tones: [180 * k, 330 * k], toneDecay: 0.1, toneLevel: lvl(P('level')) * v.acc, noiseHp: 1200, noiseLp: 3000 + P('tone') * 9000, noiseDecay: 0.2, noiseLevel: lvl(P('level')) * v.acc * P('snappy') * 0.9 });
@@ -192,9 +193,9 @@ const R909 = {
   ht: ['ht', (v, P) => tom(v, { hz: 180 * (0.8 + P('tune') * 0.5), decay: 0.1 + P('decay') * 0.4, level: lvl(P('level')) * v.acc, noiseAmt: 0.2 })],
   rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc, 1.2)],
   // Hat/clap/cymbal levels calibrated against ReBirth renders (~8 dB hotter than v1).
-  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 3.2, 1250, 0.28)],
+  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 6, 1700, 0.28, 0.9)],
   ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 8000, noiseMix: 0.6, choke: true })],
-  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2, decay: 0.15 + P('ohDecay') * 0.9, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
+  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.5, decay: 0.25 + P('ohDecay') * 1.5, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
   cr: ['cy', (v, P) => cymbal(v, { level: lvl(P('crLevel')) * v.acc * 1.6, decay: 1.6, scale: 1.7 * (0.7 + P('crTune') * 0.6), hp: 4000, bp: 6000, noiseMix: 0.5 })],
   rd: ['cy', (v, P) => cymbal(v, { level: lvl(P('rdLevel')) * v.acc * 1.2, decay: 1.2, scale: 2.3 * (0.7 + P('rdTune') * 0.6), hp: 5000, bp: 8000, noiseMix: 0.15 })],
 };

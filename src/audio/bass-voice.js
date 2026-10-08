@@ -81,6 +81,12 @@ export class BassVoice {
       if (this.sliding) this.release(t);
       return;
     }
+    // A tie holds the previous note: no new pitch, no retrigger, gate stays open.
+    if (s.tie && this.holding) {
+      this.holding = !!next.tie;
+      if (!this.holding) this.vca.gain.setTargetAtTime(0, t + stepDur * GATE, 0.006);
+      return;
+    }
     const freq = this.osc.frequency;
     const hz = midiToHz(BASE_MIDI + s.note + s.octave * 12);
     if (this.sliding) {
@@ -91,8 +97,9 @@ export class BassVoice {
       this.trigger(t, s.accent, p);
     }
     // A slide into a following note holds the gate and skips the retrigger.
-    this.sliding = s.slide && next.gate;
-    if (!this.sliding) this.vca.gain.setTargetAtTime(0, t + stepDur * GATE, 0.006);
+    this.sliding = s.slide && next.gate && !next.tie;
+    this.holding = !!next.tie;
+    if (!this.sliding && !this.holding) this.vca.gain.setTargetAtTime(0, t + stepDur * GATE, 0.006);
   }
 
   trigger(t, accent, p) {
