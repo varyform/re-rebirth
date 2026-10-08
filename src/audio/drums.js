@@ -160,9 +160,10 @@ function cymbal(v, { level, decay, scale, hp, bp, noiseMix }) {
 const R808 = {
   bd: ['bd', (v, P) => kick(v, { base: 47 + P('tone') * 8, sweep: 2.2, sweepTime: 0.05, decay: 0.15 + P('decay') * 1.4, level: lvl(P('level')) * v.acc * 1.4, click: P('tone') * 0.35 })],
   sd: ['sd', (v, P) => snare(v, { tones: [185, 330], toneDecay: 0.12, toneLevel: lvl(P('level')) * v.acc * (1.2 - P('tone') * 0.5), noiseHp: 1800, noiseLp: 6000 + P('tone') * 6000, noiseDecay: 0.18, noiseLevel: lvl(P('level')) * v.acc * P('snappy') * 0.8 })],
-  lt: ['lt', (v, P) => tom(v, { hz: 80 * (0.8 + P('tuning') * 0.5), decay: 0.45, level: lvl(P('level')) * v.acc })],
-  mt: ['mt', (v, P) => tom(v, { hz: 120 * (0.8 + P('tuning') * 0.5), decay: 0.38, level: lvl(P('level')) * v.acc })],
-  ht: ['ht', (v, P) => tom(v, { hz: 170 * (0.8 + P('tuning') * 0.5), decay: 0.3, level: lvl(P('level')) * v.acc })],
+  // Tom pitches measured against ReBirth renders (~185/270/390 Hz at mid tuning).
+  lt: ['lt', (v, P) => tom(v, { hz: 170 * (0.8 + P('tuning') * 0.5), decay: 0.45, level: lvl(P('level')) * v.acc })],
+  mt: ['mt', (v, P) => tom(v, { hz: 250 * (0.8 + P('tuning') * 0.5), decay: 0.38, level: lvl(P('level')) * v.acc })],
+  ht: ['ht', (v, P) => tom(v, { hz: 360 * (0.8 + P('tuning') * 0.5), decay: 0.3, level: lvl(P('level')) * v.acc })],
   rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc)],
   cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 1.6, 1100, 0.2)],
   cb: ['cb', (v, P) => {
@@ -174,13 +175,14 @@ const R808 = {
     }
     out.connect(v.out);
   }],
-  cy: ['cy', (v, P) => cymbal(v, { level: lvl(P('level')) * v.acc * 0.9, decay: 0.5 + P('decay') * 1.8, scale: 1, hp: 3000 + P('tone') * 4000, bp: 7000 + P('tone') * 3000, noiseMix: 0.2 })],
-  oh: ['oh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.9, decay: 0.15 + P('decay') * 0.6, chokeable: true })],
-  ch: ['ch', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.9, decay: 0.045, choke: true })],
+  cy: ['cy', (v, P) => cymbal(v, { level: lvl(P('level')) * v.acc * 1.6, decay: 0.5 + P('decay') * 1.8, scale: 1, hp: 3000 + P('tone') * 4000, bp: 7000 + P('tone') * 3000, noiseMix: 0.2 })],
+  oh: ['oh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.15 + P('decay') * 0.6, chokeable: true })],
+  ch: ['ch', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.045, choke: true })],
 };
 
 const R909 = {
-  bd: ['bd', (v, P) => kick(v, { base: 50, sweep: 2 + P('tune') * 4, sweepTime: 0.03, decay: 0.2 + P('decay') * 0.8, level: lvl(P('level')) * v.acc * 1.4, click: 0.15 + P('attack') * 0.8 })],
+  // Fundamental measured at ~67 Hz with tune at max.
+  bd: ['bd', (v, P) => kick(v, { base: 52 + P('tune') * 15, sweep: 2 + P('tune') * 4, sweepTime: 0.03, decay: 0.2 + P('decay') * 0.8, level: lvl(P('level')) * v.acc * 1.4, click: 0.15 + P('attack') * 0.8 })],
   sd: ['sd', (v, P) => {
     const k = 0.8 + P('tune') * 0.6;
     snare(v, { tones: [180 * k, 330 * k], toneDecay: 0.1, toneLevel: lvl(P('level')) * v.acc, noiseHp: 1200, noiseLp: 3000 + P('tone') * 9000, noiseDecay: 0.2, noiseLevel: lvl(P('level')) * v.acc * P('snappy') * 0.9 });
@@ -189,11 +191,12 @@ const R909 = {
   mt: ['mt', (v, P) => tom(v, { hz: 130 * (0.8 + P('tune') * 0.5), decay: 0.12 + P('decay') * 0.5, level: lvl(P('level')) * v.acc, noiseAmt: 0.2 })],
   ht: ['ht', (v, P) => tom(v, { hz: 180 * (0.8 + P('tune') * 0.5), decay: 0.1 + P('decay') * 0.4, level: lvl(P('level')) * v.acc, noiseAmt: 0.2 })],
   rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc, 1.2)],
-  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 1.6, 1250, 0.28)],
-  ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.8, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 8000, noiseMix: 0.6, choke: true })],
-  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.8, decay: 0.15 + P('ohDecay') * 0.9, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
-  cr: ['cy', (v, P) => cymbal(v, { level: lvl(P('crLevel')) * v.acc * 0.8, decay: 1.6, scale: 1.7 * (0.7 + P('crTune') * 0.6), hp: 4000, bp: 6000, noiseMix: 0.5 })],
-  rd: ['cy', (v, P) => cymbal(v, { level: lvl(P('rdLevel')) * v.acc * 0.6, decay: 1.2, scale: 2.3 * (0.7 + P('rdTune') * 0.6), hp: 5000, bp: 8000, noiseMix: 0.15 })],
+  // Hat/clap/cymbal levels calibrated against ReBirth renders (~8 dB hotter than v1).
+  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 3.2, 1250, 0.28)],
+  ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 8000, noiseMix: 0.6, choke: true })],
+  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2, decay: 0.15 + P('ohDecay') * 0.9, scale: 1.3, hp: 7500, noiseMix: 0.6, chokeable: true })],
+  cr: ['cy', (v, P) => cymbal(v, { level: lvl(P('crLevel')) * v.acc * 1.6, decay: 1.6, scale: 1.7 * (0.7 + P('crTune') * 0.6), hp: 4000, bp: 6000, noiseMix: 0.5 })],
+  rd: ['cy', (v, P) => cymbal(v, { level: lvl(P('rdLevel')) * v.acc * 1.2, decay: 1.2, scale: 2.3 * (0.7 + P('rdTune') * 0.6), hp: 5000, bp: 8000, noiseMix: 0.15 })],
 };
 
 // track id -> [knob group id, voice]

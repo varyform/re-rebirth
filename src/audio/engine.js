@@ -10,7 +10,7 @@ import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { BASS_IDS, DRUM_IDS, HIT } from '../state.js';
 import { BassVoice } from './bass-voice.js';
 import { KITS } from './drums.js';
-import { createDelay, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
+import { createDelay, distMakeup, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
 import { PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent', 'volume', 'waveform'];
@@ -18,6 +18,7 @@ export const DELAY_STEPS = 32;
 const MAX_SWING = 0.42; // fraction of a step that off-beats move at full shuffle
 const METER_RANGE_DB = 48;
 const MAX_FILTER_HZ = 14000;
+const PAN_WIDTH = 0.5;
 
 // Unity at the top: song files usually run channel faders near full.
 const faderGain = (v) => v * v;
@@ -132,7 +133,8 @@ export class AudioEngine {
 
     const anySolo = CHANNELS.some(([id]) => state.on01(`mixer.${id}.solo`));
     for (const [id, ch] of Object.entries(this.channels)) {
-      set(ch.pan.pan, (g(`mixer.${id}.pan`) - 0.5) * 2);
+      // Measured against ReBirth: its pan law is a little gentler than equal-power at full width.
+      set(ch.pan.pan, (g(`mixer.${id}.pan`) - 0.5) * 2 * PAN_WIDTH);
       set(ch.fader.gain, faderGain(g(`mixer.${id}.level`)));
       set(ch.send.gain, g(`mixer.${id}.delay`) ** 2);
       const audible = state.on01(`${id}.on`) && !state.on01(`mixer.${id}.mute`) && (!anySolo || state.on01(`mixer.${id}.solo`));
@@ -147,7 +149,7 @@ export class AudioEngine {
     const unit = this.stepDuration() * (state.on01('fx.delay.triplet') ? 2 / 3 : 1);
     set(d.delay.delayTime, Math.min(11.9, steps * unit), 0.05);
     set(d.feedback.gain, g('fx.delay.feedback') * 0.85);
-    set(d.pan.pan, (g('fx.delay.pan') - 0.5) * 2);
+    set(d.pan.pan, (g('fx.delay.pan') - 0.5) * 2 * PAN_WIDTH);
     set(this.delayReturn.gain, g('mixer.delayReturn') * 1.2);
 
     this.syncInserts();
@@ -173,26 +175,36 @@ export class AudioEngine {
 
     const amount = g('fx.dist.amount');
     const shape = g('fx.dist.shape');
-    const drive = 0.3 + amount * amount * 12;
+    const drive = 0.5 + amount * amount * 12;
+    const distKey = `${drive.toFixed(3)}:${shape.toFixed(3)}`;
+    if (distKey !== this.distKey) {
+      this.distKey = distKey;
+      this.distGain = distMakeup(drive, shape);
+    }
 
     const ca = g('fx.comp.amount');
-    const type = PCF_TYPES[state.on01('fx.pcf.mode') ? 1 : 0];
+    const lowpass = state.on01('fx.pcf.mode');
+    const type = PCF_TYPES[lowpass ? 1 : 0];
     const reso = g('fx.pcf.reso');
     for (const chain of chains) {
       const dist = chain.stages.dist.fx;
       set(dist.drive.gain, drive);
-      set(dist.mix.soft.gain, 1 - shape);
-      set(dist.mix.hard.gain, shape);
+      set(dist.mix.soft.gain, (1 - shape) * this.distGain);
+      set(dist.mix.hard.gain, shape * this.distGain);
+      // No makeup gain: measured against ReBirth, the compressor doesn't raise the level.
       const { comp, makeup } = chain.stages.comp.fx;
       set(comp.threshold, -g('fx.comp.threshold') * 40);
       set(comp.ratio, 1 + ca * 11);
       set(comp.attack, 0.004);
       set(comp.release, 0.15);
-      set(makeup.gain, 1 + ca * 1.2);
+      set(makeup.gain, 1);
       const filter = chain.stages.pcf.fx.filter;
       if (filter.type !== type) filter.type = type;
-      // Q is in dB for lowpass, linear for bandpass.
-      set(filter.Q, type === 'lowpass' ? reso * 18 : 0.7 + reso * 9);
+      // Q is in dB for lowpass, linear for bandpass. The bandpass is fairly
+      // broad: measured against ReBirth, resonance ~0.8 gives Q ~1.4.
+      set(filter.Q, lowpass ? reso * 18 : 0.6 + reso);
+      // A bandpass drops everything off-centre; ReBirth's keeps roughly the same loudness.
+      set(chain.stages.pcf.fx.makeup.gain, lowpass ? 1 : 2.2);
     }
   }
 
@@ -251,8 +263,9 @@ export class AudioEngine {
     const target = CHANNELS[state.choice('fx.pcf.target', PCF_TARGETS.length) - 1][0];
     const wave = PCF_WAVES[state.choice('fx.pcf.wave', PCF_WAVE_COUNT)];
     const value = wave[positions[target] ?? 0];
-    const base = Math.min(MAX_FILTER_HZ, 50 * 2 ** (state.get('fx.pcf.freq') * 8));
-    const peak = Math.min(MAX_FILTER_HZ, base * 2 ** (value * state.get('fx.pcf.amount') * 6));
+    // Frequency 42/127 measured at ~145 Hz centre in ReBirth renders.
+    const base = Math.min(MAX_FILTER_HZ, 30 * 2 ** (state.get('fx.pcf.freq') * 7));
+    const peak = Math.min(MAX_FILTER_HZ, base * 2 ** (value * state.get('fx.pcf.amount') * 4));
     const decay = stepDur * (0.2 + state.get('fx.pcf.decay') * 4);
     const f = chain.stages.pcf.fx.filter.frequency;
     f.cancelScheduledValues(time);

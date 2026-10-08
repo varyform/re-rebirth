@@ -1,11 +1,15 @@
 // Monophonic acid bass voice. The oscillator runs continuously so slides can
 // glide pitch; notes are scheduled as automation on the filter env and VCA.
 //
-// osc -> lowpass (flat) -> lowpass (resonant) -> VCA -> level -> out
+// osc -> lowpass (flat) -> lowpass (resonant) -> VCA -> level -> low cut -> out
 // The filter envelope drives both filters' `detune` (cents), so the cutoff knob
 // stays live on `frequency` while notes are playing.
 
-const BASE_MIDI = 36; // C2
+// Note 0 at the centre tune position. Measured against ReBirth renders, its
+// basslines sit about a semitone above C2.
+const BASE_MIDI = 37;
+const TUNE_CENTER = 64 / 127; // song files centre the tune knob at 64 of 0..127
+const TUNE_RANGE = 1200 * (127 / 63.5); // cents across the knob: ±1 octave
 const GATE = 0.55; // fraction of a step the gate stays open
 const GLIDE = 0.035; // slide time constant, seconds
 const MAX_CUTOFF = 14000; // keep cutoff + envelope sweep safely below Nyquist
@@ -35,7 +39,13 @@ export class BassVoice {
     this.vca = ctx.createGain();
     this.vca.gain.value = 0;
     this.level = ctx.createGain();
-    this.osc.connect(this.f1).connect(this.f2).connect(this.vca).connect(this.level).connect(out);
+    // Like the hardware's output coupling, the low octave's fundamental is thinned out
+    // (ReBirth renders show sub notes ~8 dB lower than an unfiltered saw).
+    const lowCut = ctx.createBiquadFilter();
+    lowCut.type = 'highpass';
+    lowCut.frequency.value = 55;
+    lowCut.Q.value = 0.6;
+    this.osc.connect(this.f1).connect(this.f2).connect(this.vca).connect(this.level).connect(lowCut).connect(out);
     this.osc.start();
     this.env.start();
     this.sliding = false;
@@ -48,9 +58,10 @@ export class BassVoice {
     set(this.f1.frequency, cutoff);
     set(this.f2.frequency, cutoff);
     set(this.f2.Q, -3 + p.resonance * 25);
-    set(this.osc.detune, (p.tuning - 0.5) * 2400);
+    set(this.osc.detune, (p.tuning - TUNE_CENTER) * TUNE_RANGE);
     // Resonance peaks add a lot of energy; trim so the knob doesn't double as volume.
-    set(this.level.gain, (p.volume * p.volume * 0.7) / (1 + p.resonance * 1.5));
+    // Overall level calibrated against ReBirth renders (bass sits ~10 dB above v1).
+    set(this.level.gain, (p.volume * p.volume * 2.2) / (1 + p.resonance * 1.5));
     const type = p.waveform >= 0.5 ? 'square' : 'sawtooth';
     if (this.osc.type !== type) this.osc.type = type;
   }

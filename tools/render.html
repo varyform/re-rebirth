@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <title>Offline render</title>
+</head>
+
+<body>
+  <!-- Driven by tools/render.mjs: renders a song offline with the real engine. -->
+  <script type="module">
+    import {AudioEngine} from '/src/audio/engine.js';
+    import {Rack} from '/src/render/rack.js';
+    import {Clock} from '/src/sequencer/clock.js';
+    import {isRbs, parseRbs} from '/src/song/rbs.js';
+    import {applySession} from '/src/song/session.js';
+    import {DEVICE_IDS, State} from '/src/state.js';
+
+    // Returns interleaved 16-bit PCM as base64 (keeps the page→node transfer small).
+    // `set`: { paramKey: value } pinned for the whole render (its automation is dropped).
+    window.renderSong = async ({url, startBar = 1, bars = 16, sampleRate = 48000, solo = null, set = {}, tail = 1}) => {
+      const buffer = await (await fetch(url)).arrayBuffer();
+      const session = isRbs(buffer) ? parseRbs(buffer) : JSON.parse(new TextDecoder().decode(buffer));
+      const state = new State();
+      const engine = new AudioEngine(state);
+      const clock = new Clock(state, engine);
+      new Rack(state, {clock, engine, files: {}});
+      applySession(state, session);
+
+      const seconds = (bars * 16 * 60) / state.transport.tempo / 4 + tail;
+      const ctx = new OfflineAudioContext(2, Math.ceil(seconds * sampleRate), sampleRate);
+      let now = 0;
+      Object.defineProperty(ctx, 'currentTime', {get: () => now});
+      engine.build(ctx);
+      engine.start = () => ctx;
+      if (solo) {
+        // Silence other devices by stripping their tracks and switching them off.
+        for (const id of DEVICE_IDS) {
+          if (id === solo) continue;
+          state.song.tracks[id] = state.song.tracks[id].filter((e) => e.key === 'pattern');
+          state.song.tracks[id].push({tick: 0, key: `${id}.on`, value: 0});
+          state.song.tracks[id].sort((a, b) => a.tick - b.tick);
+          state.set(`${id}.on`, 0);
+        }
+      }
+
+      for (const [key, value] of Object.entries(set)) {
+        for (const id of Object.keys(state.song.tracks)) state.song.tracks[id] = state.song.tracks[id].filter((e) => e.key !== key);
+        state.set(key, value);
+      }
+
+      state.transport.bar = startBar;
+      const realSetInterval = window.setInterval;
+      window.setInterval = () => 0;
+      clock.play();
+      window.setInterval = realSetInterval;
+      const end = seconds - tail;
+      while (now < end) {
+        now += 0.02;
+        clock.schedule();
+      }
+      clock.endAt = 0; // stop scheduling
+      now = 0;
+      const out = await ctx.startRendering();
+
+      const L = out.getChannelData(0);
+      const R = out.getChannelData(1);
+      const pcm = new Int16Array(L.length * 2);
+      for (let i = 0; i < L.length; i++) {
+        pcm[i * 2] = Math.max(-1, Math.min(1, L[i])) * 32767;
+        pcm[i * 2 + 1] = Math.max(-1, Math.min(1, R[i])) * 32767;
+      }
+      const bytes = new Uint8Array(pcm.buffer);
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      return {sampleRate, channels: 2, data: btoa(bin), tempo: state.transport.tempo};
+    };
+    window.renderReady = true;
+  </script>
+</body>
+
+</html>
