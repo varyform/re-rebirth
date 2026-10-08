@@ -1,3 +1,5 @@
+import { hits } from '../../ui/hits.js';
+import { click } from '../../ui/handlers.js';
 import { Knob } from '../controls.js';
 import { brushed, button, FONT, icon, lcd, led, panel, screws, sevenSeg, sevenSegWidth, text, vgrad } from '../primitives.js';
 import { C, KNOB } from '../theme.js';
@@ -11,8 +13,14 @@ const BUTTONS = [
 ];
 
 export class Transport {
-  constructor(state, x, y, w, h) {
-    Object.assign(this, { state, x, y, w, h });
+  constructor(state, clock, x, y, w, h) {
+    Object.assign(this, { state, clock, x, y, w, h });
+    this.actions = {
+      rew: () => clock.seekBar(-1),
+      ff: () => clock.seekBar(1),
+      stop: () => clock.stop(),
+      play: () => clock.play(),
+    };
     state.define('master.volume', 0.8);
     this.master = new Knob({ x: w - 30, y: 37, r: 14, param: 'master.volume', label: 'MASTER', style: KNOB.fx });
   }
@@ -35,10 +43,9 @@ export class Transport {
     lcd(ctx, 240, 19, 104, 40);
     const tempo = t.tempo.toFixed(1).padStart(5, ' ');
     sevenSeg(ctx, tempo, 240 + (104 - sevenSegWidth(tempo, 15)) / 2, 26, 15, 26);
-    button(ctx, 349, 19, 16, 19);
-    icon(ctx, 'up', 357, 28.5, 6, C.inkLight);
-    button(ctx, 349, 40, 16, 19);
-    icon(ctx, 'down', 357, 49.5, 6, C.inkLight);
+    hits.rect(ctx, 240, 19, 104, 40, this.tempoDrag());
+    this.nudgeButton(ctx, 'up', 19, 1);
+    this.nudgeButton(ctx, 'down', 40, -1);
 
     // Song position (bar.step)
     text(ctx, t.mode === 'song' ? 'SONG POSITION' : 'PATTERN POSITION', 430, 12, LABEL);
@@ -49,8 +56,11 @@ export class Transport {
     // Transport buttons
     BUTTONS.forEach(([kind, label], i) => {
       const bx = 498 + i * 40;
+      const key = `transport.${kind}`;
       const active = kind === 'play' ? t.playing : kind === 'stop' ? !t.playing : false;
-      const off = button(ctx, bx, 24, 34, 26, { face: active ? C.btnPressed : C.btnDark, pressed: active });
+      const held = active || hits.isPressed(key);
+      const off = button(ctx, bx, 24, 34, 26, { face: held ? C.btnPressed : C.btnDark, pressed: held });
+      hits.rect(ctx, bx, 24, 34, 26, click(this.actions[kind], key));
       icon(ctx, kind, bx + 17, 37 + off, 11, kind === 'play' && t.playing ? C.ledGreen : C.inkLight);
       text(ctx, label, bx + 17, 61, LABEL);
       if (kind === 'play' || kind === 'stop') led(ctx, bx + 17, 15, 2.4, active, kind === 'play' ? C.ledGreen : C.ledRed);
@@ -62,11 +72,41 @@ export class Transport {
     text(ctx, 'PATTERN', 677, 26.5, { ...LABEL, align: 'left', spacing: 0.3, color: C.inkLight });
     led(ctx, 671, 38, 2.4, t.mode === 'song', C.ledYellow);
     text(ctx, 'SONG', 677, 38.5, { ...LABEL, align: 'left', spacing: 0.3, color: C.inkLight });
-    button(ctx, 666, 48, 50, 13);
-    text(ctx, 'SELECT', 691, 55, { ...LABEL, size: 5.5 });
+    const modeOff = button(ctx, 666, 48, 50, 13, { pressed: hits.isPressed('transport.mode') });
+    text(ctx, 'SELECT', 691, 55 + modeOff, { ...LABEL, size: 5.5 });
+    hits.rect(ctx, 666, 48, 50, 13, click(() => (t.mode = t.mode === 'pattern' ? 'song' : 'pattern'), 'transport.mode'));
     ctx.restore();
 
     this.master.draw(ctx, state);
+  }
+
+  nudgeButton(ctx, dir, y, sign) {
+    const key = `transport.tempo.${dir}`;
+    const off = button(ctx, 349, y, 16, 19, { pressed: hits.isPressed(key) });
+    icon(ctx, dir, 357, y + 9.5 + off, 6, C.inkLight);
+    hits.rect(ctx, 349, y, 16, 19, click((ev) => this.state.setTempo(this.state.transport.tempo + sign * (ev.fine ? 0.1 : 1)), key));
+  }
+
+  // Drag the readout: 2 px per BPM, shift for 0.1 steps.
+  tempoDrag() {
+    const { state } = this;
+    const nudge = (amount) => state.setTempo(state.transport.tempo + amount);
+    return {
+      cursor: 'ns-resize',
+      down: () => {
+        let acc = 0;
+        return {
+          move: (ev) => {
+            acc -= ev.ddy / (ev.fine ? 20 : 2);
+            const whole = Math.trunc(acc);
+            if (!whole) return;
+            acc -= whole;
+            nudge(whole * (ev.fine ? 0.1 : 1));
+          },
+        };
+      },
+      wheel: (ev) => nudge(-Math.sign(ev.delta) * (ev.fine ? 0.1 : 1)),
+    };
   }
 
   drawLogo(ctx, x, y) {

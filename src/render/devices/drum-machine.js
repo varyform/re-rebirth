@@ -1,3 +1,5 @@
+import { hits } from '../../ui/hits.js';
+import { click, paintSteps, toggle } from '../../ui/handlers.js';
 import { Knob, PatternSelector } from '../controls.js';
 import { brushed, button, led, line, panel, rrect, screws, shade, text, textWidth, vgrad } from '../primitives.js';
 import { C, KNOB, SELECTOR } from '../theme.js';
@@ -13,7 +15,7 @@ export class DrumMachine {
     this.knobs = [];
     state.define(`${cfg.id}.shuffle`, 0);
     this.groups = this.layoutGroups();
-    this.selector = new PatternSelector({ x: 20, y: 136, w: 176, theme: cfg.selector, getDevice: () => state.drums[cfg.id] });
+    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: 136, w: 176, theme: cfg.selector, getDevice: () => state.drums[cfg.id] });
   }
 
   // Spreads instrument groups across the panel; each group is a small knob grid.
@@ -90,14 +92,22 @@ export class DrumMachine {
     const shuffle = state.get(`${cfg.id}.shuffle`) >= 0.5;
     led(ctx, w - 62, 9, 2.3, shuffle, t.led);
     text(ctx, 'SHUFFLE', w - 56, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 0.8 });
+    hits.rect(ctx, w - 67, 2, 60, 14, toggle(state, `${cfg.id}.shuffle`));
   }
 
   drawGroups(ctx) {
     const { cfg, state } = this;
     const t = cfg.theme;
-    const selected = state.drums[cfg.id].selected;
+    const dev = state.drums[cfg.id];
+    const selected = dev.selected;
     this.groups.forEach((g, i) => {
       const cx = g.x + g.w / 2;
+      // Groups with two voices (hi-hat, cymbal) alternate between them on repeat clicks.
+      const pick = () => {
+        const at = g.tracks.indexOf(dev.selected);
+        dev.selected = g.tracks[(at + 1) % g.tracks.length];
+      };
+      hits.rect(ctx, g.x, 21, g.w, 12, click(pick));
       if (g.tracks.includes(selected)) {
         const tw = textWidth(ctx, g.label, GROUP_LABEL) + 8;
         rrect(ctx, cx - tw / 2, 22, tw, 10, 2);
@@ -140,6 +150,15 @@ export class DrumMachine {
       }
       text(ctx, String(i + 1), cx, 184, { size: 6.5, weight: 800, color: t.bottomInk });
     }
+
+    hits.rect(
+      ctx,
+      STEP_X,
+      134,
+      16 * stepW,
+      44,
+      paintSteps({ x0: STEP_X, stepW, get: (i) => track[i], set: (i, v) => (track[i] = v) }),
+    );
 
     ctx.lineWidth = 1.2;
     for (let g = 0; g < 4; g++) {

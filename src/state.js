@@ -11,6 +11,7 @@ export class State {
   constructor() {
     // Continuous controls, normalised 0..1, keyed like "bass1.cutoff".
     this.params = new Map();
+    this.defaults = new Map();
     this.transport = { playing: false, tempo: 125, mode: 'pattern', bar: 1, step: -1 };
     this.bass = {};
     for (const id of BASS_IDS) {
@@ -26,7 +27,21 @@ export class State {
   }
 
   define(key, value) {
-    if (!this.params.has(key)) this.params.set(key, value);
+    if (this.params.has(key)) return;
+    this.params.set(key, value);
+    this.defaults.set(key, value);
+  }
+
+  reset(key) {
+    if (this.defaults.has(key)) this.params.set(key, this.defaults.get(key));
+  }
+
+  toggle(key) {
+    this.set(key, this.get(key) >= 0.5 ? 0 : 1);
+  }
+
+  setTempo(bpm) {
+    this.transport.tempo = Math.round(Math.min(300, Math.max(20, bpm)) * 10) / 10;
   }
 
   get(key) {

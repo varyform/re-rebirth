@@ -1,15 +1,19 @@
 import './style.css';
 import { Rack } from './render/rack.js';
+import { Clock } from './sequencer/clock.js';
 import { State } from './state.js';
+import { hits } from './ui/hits.js';
+import { attachPointer } from './ui/pointer.js';
 
 const canvas = document.getElementById('rack');
 const ctx = canvas.getContext('2d');
 const state = new State();
-const rack = new Rack(state);
+const clock = new Clock(state, requestRender);
+const rack = new Rack(state, clock);
 
 let frame = 0;
 
-export function requestRender() {
+function requestRender() {
   if (!frame) frame = requestAnimationFrame(render);
 }
 
@@ -17,6 +21,7 @@ function render() {
   frame = 0;
   // Draw in rack design units; the transform handles window scale + HiDPI.
   ctx.setTransform(canvas.width / rack.width, 0, 0, canvas.height / rack.height, 0, 0);
+  hits.clear();
   rack.draw(ctx);
 }
 
@@ -46,6 +51,13 @@ function watchPixelRatio() {
   );
 }
 
+window.addEventListener('keydown', (e) => {
+  if (e.code !== 'Space' || e.repeat) return;
+  e.preventDefault();
+  clock.toggle();
+});
+
+attachPointer(canvas, requestRender);
 window.addEventListener('resize', resize);
 watchPixelRatio();
 resize();

@@ -1,3 +1,5 @@
+import { hits } from '../../ui/hits.js';
+import { click, faderDrag, knobDrag, toggle } from '../../ui/handlers.js';
 import { Knob } from '../controls.js';
 import { button, fader, lcd, led, ledBar, line, MONO, panel, rrect, sevenSeg, sevenSegWidth, shade, text, vgrad } from '../primitives.js';
 import { C, KNOB } from '../theme.js';
@@ -17,8 +19,10 @@ export const CHANNELS = [
   ['r909', 'DRUM 09'],
 ];
 
+const TARGETS = [...CHANNELS.map(([, label]) => label), 'MASTER'];
 const CH_W = 58;
 const FADER_Y = 150;
+const FADER_CAP = 11;
 const styleFor = (accent) => ({ ...KNOB.fx, pointers: [[accent, 0.22, 0.95, 0.15]] });
 
 // Right-hand column. Module rows line up with the instrument rows beside it
@@ -78,8 +82,8 @@ export class EffectsColumn {
       this.drawFrame(ctx, m);
       if (m.key === 'mixer') this.drawMixer(ctx, m);
       if (m.key === 'delay') this.drawDelay(ctx);
-      if (m.key === 'dist') this.drawTarget(ctx, m, state.fx.distTarget);
-      if (m.key === 'comp') this.drawTarget(ctx, m, state.fx.compTarget);
+      if (m.key === 'dist') this.drawTarget(ctx, m, 'distTarget');
+      if (m.key === 'comp') this.drawTarget(ctx, m, 'compTarget');
       if (m.key === 'pcf') this.drawPcf(ctx);
       for (const k of m.knobs) k.draw(ctx, state);
       ctx.restore();
@@ -97,6 +101,7 @@ export class EffectsColumn {
     if (m.toggle) {
       led(ctx, m.w - 22, 8, 2.3, this.state.get(m.toggle) >= 0.5, m.accent);
       text(ctx, 'ON', m.w - 16, 8.5, { size: 5.5, align: 'left', color: C.inkMuted });
+      hits.rect(ctx, m.w - 28, 1, 26, 14, toggle(this.state, m.toggle));
     }
   }
 
@@ -106,14 +111,15 @@ export class EffectsColumn {
     const strip = (x0, label, levelParam) => {
       text(ctx, label, x0 + CH_W / 2, 27, { size: 6.5, weight: 800 });
       fader(ctx, x0 + 8, FADER_Y, 18, faderH, state.get(levelParam));
+      hits.rect(ctx, x0 + 8, FADER_Y, 18, faderH, faderDrag(state, levelParam, faderH - FADER_CAP));
     };
 
     CHANNELS.forEach(([id, label], i) => {
       const x0 = 6 + i * CH_W;
       strip(x0, label, `mixer.${id}.level`);
       this.drawMeter(ctx, x0 + 36, FADER_Y + 2, faderH - 4, state.meters[id] ?? 0);
-      this.drawToggle(ctx, x0 + 6, 'M', state.get(`mixer.${id}.mute`) >= 0.5, C.ledOrange);
-      this.drawToggle(ctx, x0 + 31, 'S', state.get(`mixer.${id}.solo`) >= 0.5, C.ledGreen);
+      this.drawToggle(ctx, x0 + 6, 'M', `mixer.${id}.mute`, C.ledOrange);
+      this.drawToggle(ctx, x0 + 31, 'S', `mixer.${id}.solo`, C.ledGreen);
       ctx.lineWidth = 1;
       ctx.strokeStyle = 'rgba(0,0,0,0.45)';
       line(ctx, x0 + CH_W - 1.5, 20, x0 + CH_W - 1.5, m.h - 6);
@@ -130,10 +136,12 @@ export class EffectsColumn {
     text(ctx, 'R', x0 + 44.5, FADER_Y - 7, { size: 5.5, color: C.inkMuted });
   }
 
-  drawToggle(ctx, x, label, on, color) {
+  drawToggle(ctx, x, label, param, color) {
+    const on = this.state.get(param) >= 0.5;
     const face = on ? [shade(color, 0.3), color] : C.btnDark;
     const off = button(ctx, x, 124, 21, 13, { face, pressed: on });
     text(ctx, label, x + 10.5, 131 + off, { size: 7, weight: 800, color: on ? C.bassInk : C.inkLight });
+    hits.rect(ctx, x, 124, 21, 13, toggle(this.state, param));
   }
 
   drawMeter(ctx, x, y, h, level, w = 6) {
@@ -151,14 +159,18 @@ export class EffectsColumn {
     lcd(ctx, 14, 26, 44, 42);
     sevenSeg(ctx, steps, 14 + (44 - sevenSegWidth(steps, 13)) / 2, 34, 13, 26);
     text(ctx, '1/16 STEPS', 36, 80, { size: 5.5, color: C.inkMuted, spacing: 0.5 });
+    hits.rect(ctx, 14, 26, 44, 42, knobDrag(this.state, 'fx.delay.steps'));
   }
 
-  drawTarget(ctx, m, target) {
+  // Click the readout to cycle through routing targets.
+  drawTarget(ctx, m, field) {
+    const { fx } = this.state;
     const x = 160;
     const w = m.w - x - 14;
     lcd(ctx, x, 36, w, 18, C.lcdGreen);
-    text(ctx, `\u25B8 ${target}`, x + w / 2, 45.5, { size: 7.5, family: MONO, color: C.lcdGreenOn });
+    text(ctx, `\u25B8 ${fx[field]}`, x + w / 2, 45.5, { size: 7.5, family: MONO, color: C.lcdGreenOn });
     text(ctx, 'TARGET', x + w / 2, 66, { size: 5.5, color: C.inkMuted, spacing: 0.8 });
+    hits.rect(ctx, x, 36, w, 18, click(() => (fx[field] = TARGETS[(TARGETS.indexOf(fx[field]) + 1) % TARGETS.length])));
   }
 
   drawPcf(ctx) {
@@ -166,12 +178,15 @@ export class EffectsColumn {
     const y = 24;
     const w = 150;
     const h = 64;
+    const { fx } = this.state;
     lcd(ctx, x, y, w, h, C.lcdGreen);
-    text(ctx, `\u25B8 ${this.state.fx.pcfTarget}`, x + 5, y + 7, { size: 5.5, family: MONO, align: 'left', color: C.lcdGreenOn });
+    text(ctx, `\u25B8 ${fx.pcfTarget}`, x + 5, y + 7, { size: 5.5, family: MONO, align: 'left', color: C.lcdGreenOn });
+    hits.rect(ctx, x, y, w, 13, click(() => (fx.pcfTarget = TARGETS[(TARGETS.indexOf(fx.pcfTarget) + 1) % TARGETS.length])));
     const bw = (w - 10) / 16;
     const top = y + 15;
     const maxH = h - 20;
-    this.state.fx.pcf.forEach((v, i) => {
+    hits.rect(ctx, x + 5, top - 2, w - 10, maxH + 4, this.pcfDraw(x + 5, bw, top, maxH));
+    fx.pcf.forEach((v, i) => {
       const bx = x + 5 + i * bw;
       ctx.fillStyle = C.lcdGreenDim;
       ctx.fillRect(bx + 1, top, bw - 2, maxH);
@@ -179,6 +194,22 @@ export class EffectsColumn {
       const bh = Math.max(1, v * maxH);
       ctx.fillRect(bx + 1, top + maxH - bh, bw - 2, bh);
     });
+  }
+
+  // Draw the filter curve by dragging across the bars.
+  pcfDraw(x0, bw, top, maxH) {
+    const { pcf } = this.state.fx;
+    const paint = (ev) => {
+      const i = Math.floor((ev.p.x - x0) / bw);
+      if (i >= 0 && i < pcf.length) pcf[i] = Math.min(1, Math.max(0, (top + maxH - ev.p.y) / maxH));
+    };
+    return {
+      cursor: 'crosshair',
+      down(ev) {
+        paint(ev);
+        return { move: paint };
+      },
+    };
   }
 }
 

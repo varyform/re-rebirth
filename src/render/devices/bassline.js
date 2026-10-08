@@ -1,5 +1,7 @@
+import { hits } from '../../ui/hits.js';
+import { click, paintSteps, scrubSteps, toggle } from '../../ui/handlers.js';
 import { Knob, PatternSelector } from '../controls.js';
-import { brushed, button, circle, icon, led, line, miniKeyboard, MONO, panel, rrect, screws, text, textWidth, vgrad, waveIcon } from '../primitives.js';
+import { brushed, button, circle, icon, keyboardKeys, led, line, miniKeyboard, MONO, panel, rrect, screws, text, textWidth, vgrad, waveIcon } from '../primitives.js';
 import { C, KNOB, SELECTOR } from '../theme.js';
 
 export const NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B', 'C'];
@@ -19,12 +21,14 @@ const SEQ_Y = 98;
 const GRID_X = 338;
 const STEP_W = 26;
 const ROW = { note: 111, oct: 127, acc: 138, slide: 149, pad: 157 };
+const KEYBOARD = [18, 108, 168, 58];
 const EDIT_BUTTONS = [
-  ['DOWN', 198, 110],
-  ['UP', 252, 110],
-  ['ACCENT', 198, 140],
-  ['SLIDE', 252, 140],
+  ['DOWN', 198, 110, (s) => s.octave < 0, (s) => (s.octave = s.octave < 0 ? 0 : -1)],
+  ['UP', 252, 110, (s) => s.octave > 0, (s) => (s.octave = s.octave > 0 ? 0 : 1)],
+  ['ACCENT', 198, 140, (s) => s.accent, (s) => (s.accent = !s.accent)],
+  ['SLIDE', 252, 140, (s) => s.slide, (s) => (s.slide = !s.slide)],
 ];
+const NEXT_OCTAVE = { 0: 1, 1: -1, '-1': 0 };
 
 export class Bassline {
   constructor(state, x, y, w, h, { id, number }) {
@@ -38,7 +42,7 @@ export class Bassline {
       state.define(P(k), def);
       return new Knob({ x: 102 + i * 60, y: 62, r: 15, param: P(k), label, labelPos: 'above', style: KNOB.bass, labelColor: C.bassInk, labelSize: 6.5 });
     });
-    this.selector = new PatternSelector({ x: 516, y: 32, w: 236, theme: SELECTOR.bass, getDevice: () => state.bass[id] });
+    this.selector = new PatternSelector({ id, x: 516, y: 32, w: 236, theme: SELECTOR.bass, getDevice: () => state.bass[id] });
   }
 
   draw(ctx) {
@@ -76,6 +80,7 @@ export class Bassline {
     const shuffle = state.get(this.shuffleParam) >= 0.5;
     led(ctx, w - 62, 9, 2.3, shuffle, C.ledRed);
     text(ctx, 'SHUFFLE', w - 56, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 0.8 });
+    hits.rect(ctx, w - 67, 2, 60, 14, toggle(state, this.shuffleParam));
   }
 
   drawWaveSwitch(ctx, cx, cy) {
@@ -100,6 +105,7 @@ export class Bassline {
 
     waveIcon(ctx, 'saw', cx - 10, cy + 17, 4, square ? 'rgba(27,27,30,0.45)' : C.bassInk);
     waveIcon(ctx, 'square', cx + 10, cy + 17, 4, square ? C.bassInk : 'rgba(27,27,30,0.45)');
+    hits.rect(ctx, cx - 20, cy - 9, 40, 30, toggle(this.state, this.waveParam));
   }
 
   drawSequencer(ctx) {
@@ -108,13 +114,18 @@ export class Bassline {
     const pattern = state.bassPattern(id);
     const sel = pattern[dev.selectedStep];
 
-    miniKeyboard(ctx, 18, 108, 168, 58, { active: sel.gate ? sel.note : -1 });
+    // Keys enter a note on the selected step; black keys register last so they win.
+    miniKeyboard(ctx, ...KEYBOARD, { active: sel.gate ? sel.note : -1 });
+    for (const k of keyboardKeys(...KEYBOARD)) {
+      hits.rect(ctx, k.x, k.y, k.w, k.h, click(() => Object.assign(sel, { note: k.note, gate: true })));
+    }
 
-    const lit = { DOWN: sel.gate && sel.octave < 0, UP: sel.gate && sel.octave > 0, ACCENT: sel.gate && sel.accent, SLIDE: sel.gate && sel.slide };
-    for (const [label, bx, by] of EDIT_BUTTONS) {
-      button(ctx, bx, by, 48, 22, { face: C.bassPad });
-      led(ctx, bx + 8, by + 11, 2.4, lit[label], label === 'SLIDE' ? C.ledGreen : C.ledOrange);
-      text(ctx, label, bx + 28, by + 11.5, { size: 6.5, weight: 800, color: C.inkLight });
+    for (const [label, bx, by, isOn, apply] of EDIT_BUTTONS) {
+      const key = `${id}.edit.${label}`;
+      const off = button(ctx, bx, by, 48, 22, { face: C.bassPad, pressed: hits.isPressed(key) });
+      led(ctx, bx + 8, by + 11 + off, 2.4, isOn(sel), label === 'SLIDE' ? C.ledGreen : C.ledOrange);
+      text(ctx, label, bx + 28, by + 11.5 + off, { size: 6.5, weight: 800, color: C.inkLight });
+      hits.rect(ctx, bx, by, 48, 22, click(() => apply(sel), key));
     }
 
     const labelOpts = { size: 5.5, align: 'left', color: C.inkMuted, spacing: 0.4 };
@@ -148,17 +159,42 @@ export class Bassline {
       const noteColor = !s.gate ? C.bassNoteOff : s.accent ? C.bassNoteAccent : C.bassNote;
       text(ctx, s.gate ? NOTE_NAMES[s.note] : '\u2013', cx, ROW.note + 0.5, { size: 7.5, weight: 700, family: MONO, color: noteColor });
 
-      if (s.gate && s.octave) icon(ctx, s.octave > 0 ? 'up' : 'down', cx, ROW.oct, 7, C.bassNote);
+      if (s.octave) icon(ctx, s.octave > 0 ? 'up' : 'down', cx, ROW.oct, 7, s.gate ? C.bassNote : C.bassNoteOff);
       else {
         ctx.fillStyle = 'rgba(255,255,255,0.15)';
         ctx.fillRect(cx - 2.5, ROW.oct - 0.5, 5, 1);
       }
-      led(ctx, cx, ROW.acc, 2.5, s.gate && s.accent, C.ledOrange);
-      led(ctx, cx, ROW.slide, 2.5, s.gate && s.slide, C.ledGreen);
+      led(ctx, cx, ROW.acc, 2.5, s.accent, C.ledOrange);
+      led(ctx, cx, ROW.slide, 2.5, s.slide, C.ledGreen);
 
       const playing = state.transport.step === i;
       const off = button(ctx, cx - 11, ROW.pad, 22, 14, { face: playing ? C.bassPadOn : C.bassPad, pressed: playing });
       text(ctx, String(i + 1), cx, ROW.pad + 7.5 + off, { size: 6.5, weight: 800, color: playing ? C.bassInk : C.inkLight });
     });
+
+    this.registerGrid(ctx, pattern, dev);
+  }
+
+  // Note row toggles note/rest, OCT cycles up/down/none, ACC/SLIDE paint, pads select.
+  registerGrid(ctx, pattern, dev) {
+    const row = { x0: GRID_X, stepW: STEP_W };
+    const width = 16 * STEP_W;
+    const select = (i) => (dev.selectedStep = i);
+    const flag = (name) => ({ ...row, get: (i) => pattern[i][name], set: (i, v) => (pattern[i][name] = v) });
+    hits.rect(ctx, GRID_X, 103, width, 16, paintSteps({ ...flag('gate'), after: select }));
+    hits.rect(
+      ctx,
+      GRID_X,
+      ROW.oct - 6,
+      width,
+      12,
+      click((ev) => {
+        const i = Math.floor((ev.p.x - GRID_X) / STEP_W);
+        if (pattern[i]) pattern[i].octave = NEXT_OCTAVE[pattern[i].octave];
+      }),
+    );
+    hits.rect(ctx, GRID_X, ROW.acc - 5.5, width, 11, paintSteps(flag('accent')));
+    hits.rect(ctx, GRID_X, ROW.slide - 5.5, width, 11, paintSteps(flag('slide')));
+    hits.rect(ctx, GRID_X, ROW.pad, width, 15, scrubSteps({ ...row, pick: select }));
   }
 }

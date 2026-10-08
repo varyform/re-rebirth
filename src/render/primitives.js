@@ -429,31 +429,39 @@ export function sevenSeg(ctx, str, x, y, dw, dh, opts = {}) {
 const WHITE_KEYS = [0, 2, 4, 5, 7, 9, 11, 12];
 const BLACK_KEYS = [[1, 1], [3, 2], [6, 4], [8, 5], [10, 6]]; // [note, boundary between white keys]
 
-export function miniKeyboard(ctx, x, y, w, h, { active = -1, color = C.bassAccent } = {}) {
+// Key rectangles, white keys first, so hit-testing can register blacks on top.
+export function keyboardKeys(x, y, w, h) {
   const ww = w / WHITE_KEYS.length;
+  const bw = ww * 0.6;
+  const bh = h * 0.6;
+  return [
+    ...WHITE_KEYS.map((note, i) => ({ note, black: false, x: x + i * ww, y, w: ww, h })),
+    ...BLACK_KEYS.map(([note, b]) => ({ note, black: true, x: x + b * ww - bw / 2, y, w: bw, h: bh })),
+  ];
+}
+
+export function miniKeyboard(ctx, x, y, w, h, { active = -1, color = C.bassAccent } = {}) {
   rrect(ctx, x - 2, y - 2, w + 4, h + 4, 2);
   ctx.fillStyle = '#050505';
   ctx.fill();
-  WHITE_KEYS.forEach((note, i) => {
-    const kx = x + i * ww;
+  for (const k of keyboardKeys(x, y, w, h)) {
+    const on = k.note === active;
+    if (!k.black) {
+      ctx.beginPath();
+      ctx.roundRect(k.x + 0.4, y, k.w - 0.8, h, [0, 0, 2, 2]);
+      ctx.fillStyle = vgrad(ctx, y, y + h, on ? [shade(color, 0.45), color] : ['#d4d4d1', '#fbfbf8', '#e6e6e3']);
+      ctx.fill();
+      ctx.fillStyle = 'rgba(0,0,0,0.13)';
+      ctx.fillRect(k.x + 0.4, y + h - 3, k.w - 0.8, 3);
+      continue;
+    }
     ctx.beginPath();
-    ctx.roundRect(kx + 0.4, y, ww - 0.8, h, [0, 0, 2, 2]);
-    ctx.fillStyle = vgrad(ctx, y, y + h, note === active ? [shade(color, 0.45), color] : ['#d4d4d1', '#fbfbf8', '#e6e6e3']);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(0,0,0,0.13)';
-    ctx.fillRect(kx + 0.4, y + h - 3, ww - 0.8, 3);
-  });
-  const bw = ww * 0.6;
-  const bh = h * 0.6;
-  for (const [note, b] of BLACK_KEYS) {
-    const kx = x + b * ww - bw / 2;
-    ctx.beginPath();
-    ctx.roundRect(kx, y, bw, bh, [0, 0, 1.5, 1.5]);
-    ctx.fillStyle = note === active ? vgrad(ctx, y, y + bh, [shade(color, 0.1), shade(color, -0.35)]) : vgrad(ctx, y, y + bh, ['#3b3b3b', '#0b0b0b']);
+    ctx.roundRect(k.x, y, k.w, k.h, [0, 0, 1.5, 1.5]);
+    ctx.fillStyle = vgrad(ctx, y, y + k.h, on ? [shade(color, 0.1), shade(color, -0.35)] : ['#3b3b3b', '#0b0b0b']);
     ctx.fill();
     ctx.beginPath();
-    ctx.roundRect(kx + 1.4, y, bw - 2.8, bh - 4, [0, 0, 1, 1]);
-    ctx.fillStyle = note === active ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)';
+    ctx.roundRect(k.x + 1.4, y, k.w - 2.8, k.h - 4, [0, 0, 1, 1]);
+    ctx.fillStyle = on ? 'rgba(255,255,255,0.25)' : 'rgba(255,255,255,0.08)';
     ctx.fill();
   }
 }

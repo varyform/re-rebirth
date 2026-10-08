@@ -15,13 +15,13 @@ const EFFECTS_W = 300;
 export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + EFFECTS_W;
 
 export class Rack {
-  constructor(state) {
+  constructor(state, clock) {
     this.state = state;
     this.devices = [];
     const x = RAIL_W;
     let y = MARGIN;
 
-    this.devices.push(new Transport(state, x, y, RACK_W - RAIL_W * 2, 80));
+    this.devices.push(new Transport(state, clock, x, y, RACK_W - RAIL_W * 2, 80));
     y += 80 + GAP;
 
     const top = y;
