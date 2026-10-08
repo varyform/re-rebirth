@@ -87,9 +87,9 @@ function snare(v, { tones, toneDecay, toneLevel, noiseHp, noiseLp, noiseDecay, n
   run(v, n, noiseDecay + 0.05);
 }
 
-function tom(v, { hz, decay, level, noiseAmt = 0 }) {
-  const o = osc(v, 'sine', hz * 1.35);
-  o.frequency.exponentialRampToValueAtTime(hz, v.t + 0.06);
+function tom(v, { hz, decay, level, noiseAmt = 0, sweep = 1.35, sweepTime = 0.06 }) {
+  const o = osc(v, 'sine', hz * sweep);
+  o.frequency.exponentialRampToValueAtTime(hz, v.t + sweepTime);
   chain(o, env(v, level, decay), v.out);
   run(v, o, decay + 0.05);
   if (noiseAmt) {
@@ -124,16 +124,20 @@ function clap(v, level, hz, tail, q = 1.6) {
   run(v, n, 0.04 + tail);
 }
 
-function hat(v, { level, decay, scale = 1, hp = 7000, noiseMix = 0, metalMix = 1, choke = false, chokeable = false }) {
+// body: level of the square bank's low partials leaking past the filters,
+// heard as a metallic ring around 400 Hz on the 808 hats.
+function hat(v, { level, decay, scale = 1, hp = 7000, lp = 20000, noiseMix = 0, metalMix = 1, body = 0, bodyDecay = 0.06, choke = false, chokeable = false }) {
   const out = env(v, level, decay, 0.0008);
   const mg = v.ctx.createGain();
   mg.gain.value = metalMix;
-  chain(metal(v, scale, decay + 0.05), filter(v, 'bandpass', 10000, 1), filter(v, 'highpass', hp), mg, out);
+  const source = metal(v, scale, decay + 0.05);
+  chain(source, filter(v, 'bandpass', 10000, 1), filter(v, 'highpass', hp), filter(v, 'lowpass', lp), mg, out);
+  if (body) chain(source, filter(v, 'bandpass', 400, 2), env(v, level * body, bodyDecay, 0.0008), out);
   if (noiseMix) {
     const n = noise(v);
     const ng = v.ctx.createGain();
     ng.gain.value = noiseMix;
-    chain(n, filter(v, 'highpass', hp), ng, out);
+    chain(n, filter(v, 'highpass', hp), filter(v, 'lowpass', lp), ng, out);
     run(v, n, decay + 0.05);
   }
   // The open hat goes through a separate gain so a closed hat can cut it off.
@@ -162,24 +166,26 @@ function cymbal(v, { level, decay, scale, hp, bp, noiseMix }) {
 const R808 = {
   bd: ['bd', (v, P) => kick(v, { base: 47 + P('tone') * 8, sweep: 2.2, sweepTime: 0.05, decay: 0.15 + P('decay') * 1.4, level: lvl(P('level')) * v.acc * 1.4, click: P('tone') * 0.35 })],
   sd: ['sd', (v, P) => snare(v, { tones: [185, 330], toneDecay: 0.12, toneLevel: lvl(P('level')) * v.acc * (1.2 - P('tone') * 0.5), noiseHp: 1800, noiseLp: 6000 + P('tone') * 6000, noiseDecay: 0.18, noiseLevel: lvl(P('level')) * v.acc * P('snappy') * 0.8 })],
-  // Tom pitches measured against ReBirth renders (~185/270/390 Hz at mid tuning).
-  lt: ['lt', (v, P) => tom(v, { hz: 170 * (0.8 + P('tuning') * 0.5), decay: 0.45, level: lvl(P('level')) * v.acc })],
-  mt: ['mt', (v, P) => tom(v, { hz: 250 * (0.8 + P('tuning') * 0.5), decay: 0.38, level: lvl(P('level')) * v.acc })],
-  ht: ['ht', (v, P) => tom(v, { hz: 360 * (0.8 + P('tuning') * 0.5), decay: 0.3, level: lvl(P('level')) * v.acc })],
+  // Toms measured on isolated hits in a ReBirth recording: ~194/280/388 Hz at
+  // tuning ~0.56, with almost no pitch sweep.
+  lt: ['lt', (v, P) => tom(v, { hz: 180 * (0.8 + P('tuning') * 0.5), decay: 0.45, level: lvl(P('level')) * v.acc * 0.7, sweep: 1.04, sweepTime: 0.02 })],
+  mt: ['mt', (v, P) => tom(v, { hz: 260 * (0.8 + P('tuning') * 0.5), decay: 0.38, level: lvl(P('level')) * v.acc * 0.7, sweep: 1.04, sweepTime: 0.02 })],
+  ht: ['ht', (v, P) => tom(v, { hz: 360 * (0.8 + P('tuning') * 0.5), decay: 0.2, level: lvl(P('level')) * v.acc * 0.7, sweep: 1.04, sweepTime: 0.02 })],
   rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc)],
   cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 1.6, 1100, 0.2)],
+  // Measured on isolated hits: centred near 1 kHz, short in the mids.
   cb: ['cb', (v, P) => {
-    const out = env(v, lvl(P('level')) * v.acc * 0.5, 0.3, 0.001);
+    const out = env(v, lvl(P('level')) * v.acc * 0.6, 0.12, 0.001);
     for (const hz of [540, 800]) {
       const o = osc(v, 'square', hz);
-      chain(o, filter(v, 'bandpass', 2640, 1.2), out);
-      run(v, o, 0.35);
+      chain(o, filter(v, 'bandpass', 1000, 1), out);
+      run(v, o, 0.2);
     }
     out.connect(v.out);
   }],
   cy: ['cy', (v, P) => cymbal(v, { level: lvl(P('level')) * v.acc * 1.6, decay: 0.5 + P('decay') * 1.8, scale: 1, hp: 3000 + P('tone') * 4000, bp: 7000 + P('tone') * 3000, noiseMix: 0.2 })],
-  oh: ['oh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.15 + P('decay') * 0.6, chokeable: true })],
-  ch: ['ch', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.045, choke: true })],
+  oh: ['oh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.15 + P('decay') * 0.6, body: 0.5, chokeable: true })],
+  ch: ['ch', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.045, body: 0.5, bodyDecay: 0.03, choke: true })],
 };
 
 const R909 = {
@@ -199,7 +205,7 @@ const R909 = {
   // The 909's sampled hats are broadband (flat ~4-13 kHz in ReBirth recordings):
   // mostly high-passed noise with a lighter metallic layer.
   ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 3.5, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 2400, noiseMix: 1, metalMix: 0.35, choke: true })],
-  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 3, decay: 0.25 + P('ohDecay') * 1.5, scale: 1.3, hp: 3800, noiseMix: 1, metalMix: 0.35, chokeable: true })],
+  oh: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 1.7, decay: 0.25 + P('ohDecay') * 1.5, scale: 1.3, hp: 2600, lp: 12000, noiseMix: 1, metalMix: 0.35, chokeable: true })],
   cr: ['cy', (v, P) => cymbal(v, { level: lvl(P('crLevel')) * v.acc * 1.6, decay: 1.6, scale: 1.7 * (0.7 + P('crTune') * 0.6), hp: 4000, bp: 6000, noiseMix: 0.5 })],
   rd: ['cy', (v, P) => cymbal(v, { level: lvl(P('rdLevel')) * v.acc * 1.2, decay: 1.2, scale: 2.3 * (0.7 + P('rdTune') * 0.6), hp: 5000, bp: 8000, noiseMix: 0.15 })],
 };
