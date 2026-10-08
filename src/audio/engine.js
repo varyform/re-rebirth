@@ -191,13 +191,16 @@ export class AudioEngine {
       set(dist.drive.gain, drive);
       set(dist.mix.soft.gain, (1 - shape) * this.distGain);
       set(dist.mix.hard.gain, shape * this.distGain);
-      // No makeup gain: measured against ReBirth, the compressor doesn't raise the level.
+      // Fitted to a ReBirth recording: threshold spans 0 to -20 dB, and about a
+      // third of the gain reduction comes back as makeup gain.
       const { comp, makeup } = chain.stages.comp.fx;
-      set(comp.threshold, -g('fx.comp.threshold') * 40);
-      set(comp.ratio, 1 + ca * 11);
+      const thresholdDb = -g('fx.comp.threshold') * 20;
+      const ratio = 1 + ca * 11;
+      set(comp.threshold, thresholdDb);
+      set(comp.ratio, ratio);
       set(comp.attack, 0.004);
       set(comp.release, 0.15);
-      set(makeup.gain, 1);
+      set(makeup.gain, 10 ** ((-thresholdDb * (1 - 1 / ratio) * 0.3) / 20));
       const filter = chain.stages.pcf.fx.filter;
       if (filter.type !== type) filter.type = type;
       // Q is in dB for lowpass, linear for bandpass. The bandpass is fairly

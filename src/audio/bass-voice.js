@@ -5,14 +5,23 @@
 // The filter envelope drives both filters' `detune` (cents), so the cutoff knob
 // stays live on `frequency` while notes are playing.
 
-// Note 0 at the centre tune position. Measured against ReBirth renders, its
-// basslines sit about a semitone above C2.
-const BASE_MIDI = 37;
-const TUNE_CENTER = 64 / 127; // song files centre the tune knob at 64 of 0..127
-const TUNE_RANGE = 1200 * (127 / 63.5); // cents across the knob: ±1 octave
+// Note 0 at the centre tune position: C2. Verified against a ReBirth recording
+// (C+1 octave with tune at max plays C4 = 262 Hz).
+const BASE_MIDI = 36;
+
+// Tune knob (0..127, centre 64) scales frequency linearly: ×0.5 at 0, ×1 at
+// 64, ×2 at 127. Fitted to a ReBirth recording at tune 42 and 127.
+function tuneCents(knob) {
+  const u = knob * 127 - 64;
+  const ratio = u >= 0 ? 1 + u / 63 : 1 + u / 128;
+  return 1200 * Math.log2(ratio);
+}
 const GATE = 0.55; // fraction of a step the gate stays open
 const GLIDE = 0.035; // slide time constant, seconds
 const MAX_CUTOFF = 14000; // keep cutoff + envelope sweep safely below Nyquist
+const CUTOFF_MIN = 300;
+const CUTOFF_OCTAVES = 5.5;
+const ENV_DEPTH = 4200; // cents of filter sweep at full env mod
 
 const midiToHz = (m) => 440 * 2 ** ((m - 69) / 12);
 
@@ -53,12 +62,13 @@ export class BassVoice {
 
   // Continuous controls. `set(param, value)` smooths and skips unchanged values.
   setParams(p, set) {
-    const cutoff = 60 * 2 ** (p.cutoff * 6.5);
+    // Fitted to a ReBirth recording: the knob spans ~300 Hz to ~13 kHz.
+    const cutoff = CUTOFF_MIN * 2 ** (p.cutoff * CUTOFF_OCTAVES);
     this.cutoff = cutoff;
     set(this.f1.frequency, cutoff);
     set(this.f2.frequency, cutoff);
-    set(this.f2.Q, -3 + p.resonance * 25);
-    set(this.osc.detune, (p.tuning - TUNE_CENTER) * TUNE_RANGE);
+    set(this.f2.Q, -3 + p.resonance * 22);
+    set(this.osc.detune, tuneCents(p.tuning));
     // Resonance peaks add a lot of energy; trim so the knob doesn't double as volume.
     // Overall level calibrated against ReBirth renders (bass sits ~10 dB above v1).
     set(this.level.gain, (p.volume * p.volume * 2.2) / (1 + p.resonance * 1.5));
@@ -88,7 +98,7 @@ export class BassVoice {
   trigger(t, accent, p) {
     const acc = accent ? p.accent : 0;
     const headroom = 1200 * Math.log2(MAX_CUTOFF / this.cutoff);
-    const peak = Math.min(headroom, p.envmod * 4800 + acc * 2400); // cents above cutoff
+    const peak = Math.min(headroom, p.envmod * ENV_DEPTH + acc * 2400); // cents above cutoff
     const decay = accent ? 0.2 : 0.2 + p.decay * p.decay * 1.8; // ~ -60 dB time
     const env = this.env.offset;
     env.cancelScheduledValues(t);

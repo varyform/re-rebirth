@@ -54,13 +54,23 @@
       window.setInterval = () => 0;
       clock.play();
       window.setInterval = realSetInterval;
+
+      // Schedule in slices while rendering (suspend/resume), like live playback.
+      // Scheduling everything up front keeps every hit's nodes in the graph for
+      // the whole render, which makes long renders quadratically slow.
       const end = seconds - tail;
-      while (now < end) {
-        now += 0.02;
+      const SLICE = 0.5;
+      const scheduleUntil = (t) => {
+        now = Math.min(t, end);
         clock.schedule();
+      };
+      scheduleUntil(SLICE);
+      for (let t = SLICE; t < end; t += SLICE) {
+        ctx.suspend(t).then(() => {
+          scheduleUntil(t + SLICE);
+          ctx.resume();
+        });
       }
-      clock.endAt = 0; // stop scheduling
-      now = 0;
       const out = await ctx.startRendering();
 
       const L = out.getChannelData(0);
