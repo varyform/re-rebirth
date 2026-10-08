@@ -50,11 +50,12 @@ export class BassVoice {
     this.vca = ctx.createGain();
     this.vca.gain.value = 0;
     this.level = ctx.createGain();
-    // Like the hardware's output coupling, the low octave's fundamental is thinned out
-    // (ReBirth renders show sub notes ~8 dB lower than an unfiltered saw).
+    // Like the hardware's output coupling, the low end is thinned out. Fitted to a
+    // ReBirth recording: bass-only sections match below 60 Hz, and the kick keeps
+    // its room in the full mix.
     const lowCut = ctx.createBiquadFilter();
     lowCut.type = 'highpass';
-    lowCut.frequency.value = 55;
+    lowCut.frequency.value = 100;
     lowCut.Q.value = 0.6;
     this.osc.connect(this.f1).connect(this.f2).connect(this.vca).connect(this.level).connect(lowCut).connect(out);
     this.osc.start();

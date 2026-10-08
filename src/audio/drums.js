@@ -211,7 +211,9 @@ const R808 = {
 // (one or two hits per step, effects off).
 const R909 = {
   // ~86 Hz average in the first 80 ms at tune 64, -20 dB after ~290 ms at max decay.
-  bd: ['bd', (v, P) => kick(v, { base: 56, sweep: 1.8 + P('tune') * 2, sweepTime: 0.06 + P('tune') * 0.04, decay: 0.12 + P('decay') * 0.55, level: lvl(P('level')) * v.acc * 0.75, click: 0.7 + P('attack') * 0.8, clickHz: 7000 })],
+  // Tune has a small range: at tune 127 the pitch still settles near 50 Hz within
+  // ~80 ms. Decay (-60 dB) fitted between ~1.1 s at 127 and ~0.7 s at 65.
+  bd: ['bd', (v, P) => kick(v, { base: 56, sweep: 1.8 + P('tune') * 0.6, sweepTime: 0.06 + P('tune') * 0.02, decay: 0.25 + P('decay') * 0.85, level: lvl(P('level')) * v.acc * 0.75, click: 0.7 + P('attack') * 0.8, clickHz: 7000 })],
   // Body around 186 Hz dominates; the noise sits ~7 dB under it.
   sd: ['sd', (v, P) => {
     const k = 0.8 + P('tune') * 0.6;

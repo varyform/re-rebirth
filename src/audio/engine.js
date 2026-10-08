@@ -21,6 +21,9 @@ const MAX_FILTER_HZ = 14000;
 const PAN_WIDTH = 0.5;
 // 909 per-step accent ("double power"): measured +3.3..+4.2 dB on the same voice.
 const STEP_ACCENT = 1.55;
+// Accent-track depth per accent-level knob. The 909's is strong: at level 32/127
+// ReBirth's accented kick is ~8 dB louder (KiloMix); the 808's matched at 40/127.
+const AC_DEPTH = { r808: 0.8, r909: 6 };
 
 // Unity at the top: song files usually run channel faders near full.
 const faderGain = (v) => v * v;
@@ -243,7 +246,7 @@ export class AudioEngine {
 
   playDrums(id, pattern, pos, t, only = null) {
     const { state } = this;
-    const accent = state.drumTrack(id, 'ac', pattern)[pos] ? 1 + state.get(`${id}.ac.level`) * 0.8 : 1;
+    const accent = state.drumTrack(id, 'ac', pattern)[pos] ? 1 + state.get(`${id}.ac.level`) * AC_DEPTH[id] : 1;
     for (const [track, [group, voice]] of Object.entries(KITS[id])) {
       if (only && track !== only) continue;
       const hit = only ? HIT.on : state.drumTrack(id, track, pattern)[pos];
