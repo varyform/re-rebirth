@@ -26,6 +26,10 @@ export class Transport {
     screws(ctx, w, h, 7, 8);
     this.drawLogo(ctx, 20, 38);
 
+    // The control cluster is laid out for a 772-wide bar; keep it beside the master knob.
+    ctx.save();
+    ctx.translate(w - 772, 0);
+
     // Tempo readout + nudge buttons
     text(ctx, 'TEMPO', 292, 12, LABEL);
     lcd(ctx, 240, 19, 104, 40);
@@ -60,6 +64,7 @@ export class Transport {
     text(ctx, 'SONG', 677, 38.5, { ...LABEL, align: 'left', spacing: 0.3, color: C.inkLight });
     button(ctx, 666, 48, 50, 13);
     text(ctx, 'SELECT', 691, 55, { ...LABEL, size: 5.5 });
+    ctx.restore();
 
     this.master.draw(ctx, state);
   }

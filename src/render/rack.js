@@ -1,35 +1,47 @@
 import { Bassline } from './devices/bassline.js';
 import { DrumMachine, R808, R909 } from './devices/drum-machine.js';
-import { EffectsRow } from './devices/effects.js';
+import { EffectsColumn } from './devices/effects.js';
 import { Transport } from './devices/transport.js';
 import { hgrad, line, rrect } from './primitives.js';
 import { C } from './theme.js';
 
-// Design-space size of the rack: the app's minimum (1:1) size.
-export const RACK_W = 800;
 const RAIL_W = 14;
 const MARGIN = 6;
 const GAP = 3;
+const INSTRUMENT_W = 772;
+const EFFECTS_W = 300;
+
+// Design-space width of the rack: the app's minimum (1:1) size.
+export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + EFFECTS_W;
 
 export class Rack {
   constructor(state) {
     this.state = state;
     this.devices = [];
     const x = RAIL_W;
-    const w = RACK_W - RAIL_W * 2;
     let y = MARGIN;
-    const add = (make, h) => {
-      this.devices.push(make(x, y, w, h));
+
+    this.devices.push(new Transport(state, x, y, RACK_W - RAIL_W * 2, 80));
+    y += 80 + GAP;
+
+    const top = y;
+    const bands = [];
+    const instruments = [
+      [(...r) => new Bassline(state, ...r, { id: 'bass1', number: 1 }), 176],
+      [(...r) => new Bassline(state, ...r, { id: 'bass2', number: 2 }), 176],
+      [(...r) => new DrumMachine(state, ...r, R808), 206],
+      [(...r) => new DrumMachine(state, ...r, R909), 206],
+    ];
+    for (const [make, h] of instruments) {
+      this.devices.push(make(x, y, INSTRUMENT_W, h));
+      bands.push({ y: y - top, h });
       y += h + GAP;
-    };
-    add((...r) => new Transport(state, ...r), 80);
-    add((...r) => new EffectsRow(state, ...r), 120);
-    add((...r) => new Bassline(state, ...r, { id: 'bass1', number: 1 }), 176);
-    add((...r) => new Bassline(state, ...r, { id: 'bass2', number: 2 }), 176);
-    add((...r) => new DrumMachine(state, ...r, R808), 206);
-    add((...r) => new DrumMachine(state, ...r, R909), 206);
+    }
+    const bottom = y - GAP;
+    this.devices.push(new EffectsColumn(state, x + INSTRUMENT_W + GAP, top, EFFECTS_W, bottom - top, bands, GAP));
+
     this.width = RACK_W;
-    this.height = y - GAP + MARGIN;
+    this.height = bottom + MARGIN;
   }
 
   draw(ctx) {
@@ -38,8 +50,6 @@ export class Rack {
     this.drawRail(ctx, 0);
     this.drawRail(ctx, this.width - RAIL_W);
     for (const d of this.devices) {
-      ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillRect(d.x + 1, d.y + 2, d.w, d.h);
       ctx.save();
       ctx.translate(d.x, d.y);
       d.draw(ctx);

@@ -1,13 +1,13 @@
 import { Knob } from '../controls.js';
-import { fader, lcd, led, ledBar, line, MONO, panel, rrect, sevenSeg, text, vgrad } from '../primitives.js';
+import { button, fader, lcd, led, ledBar, line, MONO, panel, rrect, sevenSeg, sevenSegWidth, shade, text, vgrad } from '../primitives.js';
 import { C, KNOB } from '../theme.js';
 
 const MODULES = [
-  { key: 'mixer', w: 300, title: 'MIXER', accent: C.mixer },
-  { key: 'delay', w: 118, title: 'DELAY', accent: C.delay },
-  { key: 'dist', w: 106, title: 'DISTORTION', accent: C.dist, toggle: 'fx.dist.on' },
-  { key: 'comp', w: 106, title: 'COMPRESSOR', accent: C.comp, toggle: 'fx.comp.on' },
-  { key: 'pcf', w: 142, title: 'PATTERN FILTER', accent: C.pcf, toggle: 'fx.pcf.on' },
+  { key: 'mixer', title: 'MIXER', accent: C.mixer },
+  { key: 'delay', title: 'DELAY', accent: C.delay },
+  { key: 'dist', title: 'DISTORTION', accent: C.dist, toggle: 'fx.dist.on' },
+  { key: 'comp', title: 'COMPRESSOR', accent: C.comp, toggle: 'fx.comp.on' },
+  { key: 'pcf', title: 'PATTERN FILTER', accent: C.pcf, toggle: 'fx.pcf.on' },
 ];
 
 export const CHANNELS = [
@@ -18,143 +18,179 @@ export const CHANNELS = [
 ];
 
 const CH_W = 58;
-const METER_LEDS = 9;
+const FADER_Y = 150;
 const styleFor = (accent) => ({ ...KNOB.fx, pointers: [[accent, 0.22, 0.95, 0.15]] });
 
-export class EffectsRow {
-  constructor(state, x, y, w, h) {
+// Right-hand column. Module rows line up with the instrument rows beside it
+// (`bands`): the mixer spans both bass lines, each drum row holds two effects.
+export class EffectsColumn {
+  constructor(state, x, y, w, h, bands, gap) {
     Object.assign(this, { state, x, y, w, h });
-    this.knobs = [];
-    this.modules = {};
-    let mx = 0;
-    for (const m of MODULES) {
-      this.modules[m.key] = { ...m, x: mx };
-      if (m.toggle) state.define(m.toggle, 1);
-      mx += m.w;
-    }
+    const rects = moduleRects(bands, gap);
+    this.modules = MODULES.map((m) => ({ ...m, ...rects[m.key], w, knobs: [] }));
+    this.mod = Object.fromEntries(this.modules.map((m) => [m.key, m]));
+    for (const m of this.modules) if (m.toggle) state.define(m.toggle, 1);
+    this.layoutMixer(this.mod.mixer);
+    this.layoutEffects();
+  }
 
-    const add = (x, y, r, param, label, def, extra = {}) => {
-      state.define(param, def);
-      this.knobs.push(new Knob({ x, y, r, param, label, ...extra }));
-    };
+  addKnob(m, x, y, r, param, label, def, extra = {}) {
+    this.state.define(param, def);
+    m.knobs.push(new Knob({ x, y, r, param, label, style: styleFor(m.accent), ...extra }));
+  }
 
-    const mix = this.modules.mixer;
-    const mixStyle = styleFor(C.mixer);
+  layoutMixer(m) {
+    const small = { ticks: 7, labelSize: 5.5 };
     CHANNELS.forEach(([id], i) => {
-      const x0 = mix.x + 6 + i * CH_W;
-      add(x0 + 15, 41, 8, `mixer.${id}.pan`, 'PAN', 0.5, { style: mixStyle, ticks: 7, labelSize: 5.5 });
-      add(x0 + 41, 41, 8, `mixer.${id}.delay`, 'DELAY', i === 0 ? 0.4 : 0.1, { style: styleFor(C.delay), ticks: 7, labelSize: 5.5 });
-      state.define(`mixer.${id}.level`, 0.72);
+      const cx = 6 + i * CH_W + CH_W / 2;
+      this.addKnob(m, cx, 52, 10, `mixer.${id}.pan`, 'PAN', 0.5, small);
+      this.addKnob(m, cx, 94, 10, `mixer.${id}.delay`, 'DELAY', i === 0 ? 0.4 : 0.1, { ...small, style: styleFor(C.delay) });
+      for (const k of ['mute', 'solo']) this.state.define(`mixer.${id}.${k}`, 0);
+      this.state.define(`mixer.${id}.level`, 0.72);
     });
-    state.define('mixer.master.level', 0.8);
+    const cx = 6 + CHANNELS.length * CH_W + CH_W / 2;
+    this.addKnob(m, cx, 52, 10, 'mixer.delayReturn', 'DLY RTN', 0.6, { ...small, style: styleFor(C.delay) });
+    this.state.define('mixer.master.level', 0.8);
+  }
 
-    const d = this.modules.delay;
-    add(d.x + 86, 37, 12, 'fx.delay.steps', 'STEPS', 2 / 7, { style: styleFor(C.delay), ticks: 8 });
-    add(d.x + 30, 87, 12, 'fx.delay.feedback', 'FEEDBACK', 0.45, { style: styleFor(C.delay) });
-    add(d.x + 88, 87, 12, 'fx.delay.pan', 'WIDTH', 0.5, { style: styleFor(C.delay) });
+  layoutEffects() {
+    const { delay, dist, comp, pcf } = this.mod;
+    this.addKnob(delay, 108, 52, 14, 'fx.delay.steps', 'STEPS', 2 / 7, { ticks: 8 });
+    this.addKnob(delay, 178, 52, 14, 'fx.delay.feedback', 'FEEDBACK', 0.45);
+    this.addKnob(delay, 248, 52, 14, 'fx.delay.pan', 'WIDTH', 0.5);
 
-    const ds = this.modules.dist;
-    add(ds.x + 30, 50, 13, 'fx.dist.amount', 'AMOUNT', 0.4, { style: styleFor(C.dist) });
-    add(ds.x + 76, 50, 13, 'fx.dist.shape', 'SHAPE', 0.55, { style: styleFor(C.dist) });
+    this.addKnob(dist, 44, 52, 14, 'fx.dist.amount', 'AMOUNT', 0.4);
+    this.addKnob(dist, 110, 52, 14, 'fx.dist.shape', 'SHAPE', 0.55);
 
-    const cp = this.modules.comp;
-    add(cp.x + 30, 50, 13, 'fx.comp.amount', 'AMOUNT', 0.3, { style: styleFor(C.comp) });
-    add(cp.x + 76, 50, 13, 'fx.comp.speed', 'SPEED', 0.5, { style: styleFor(C.comp) });
+    this.addKnob(comp, 44, 52, 14, 'fx.comp.amount', 'AMOUNT', 0.3);
+    this.addKnob(comp, 110, 52, 14, 'fx.comp.speed', 'SPEED', 0.5);
 
-    const pf = this.modules.pcf;
-    add(pf.x + 24, 83, 10, 'fx.pcf.mode', 'MODE', 0, { style: styleFor(C.pcf), ticks: 4 });
-    add(pf.x + 71, 83, 10, 'fx.pcf.level', 'LEVEL', 0.7, { style: styleFor(C.pcf) });
-    add(pf.x + 118, 83, 10, 'fx.pcf.decay', 'DECAY', 0.4, { style: styleFor(C.pcf) });
+    this.addKnob(pcf, 194, 52, 12, 'fx.pcf.mode', 'MODE', 0, { ticks: 4 });
+    this.addKnob(pcf, 234, 52, 12, 'fx.pcf.level', 'LEVEL', 0.7);
+    this.addKnob(pcf, 274, 52, 12, 'fx.pcf.decay', 'DECAY', 0.4);
   }
 
   draw(ctx) {
-    const { state, h } = this;
-    for (const m of Object.values(this.modules)) this.drawModuleFrame(ctx, m, h);
-    this.drawMixer(ctx, this.modules.mixer);
-    this.drawDelay(ctx, this.modules.delay);
-    this.drawTarget(ctx, this.modules.dist, state.fx.distTarget);
-    this.drawTarget(ctx, this.modules.comp, state.fx.compTarget);
-    this.drawPcf(ctx, this.modules.pcf);
-    for (const k of this.knobs) k.draw(ctx, state);
+    const { state } = this;
+    for (const m of this.modules) {
+      ctx.save();
+      ctx.translate(0, m.y);
+      this.drawFrame(ctx, m);
+      if (m.key === 'mixer') this.drawMixer(ctx, m);
+      if (m.key === 'delay') this.drawDelay(ctx);
+      if (m.key === 'dist') this.drawTarget(ctx, m, state.fx.distTarget);
+      if (m.key === 'comp') this.drawTarget(ctx, m, state.fx.compTarget);
+      if (m.key === 'pcf') this.drawPcf(ctx);
+      for (const k of m.knobs) k.draw(ctx, state);
+      ctx.restore();
+    }
   }
 
-  drawModuleFrame(ctx, m, h) {
-    panel(ctx, m.x + 0.5, 0, m.w - 1, h, C.fx);
+  drawFrame(ctx, m) {
+    panel(ctx, 0, 0, m.w, m.h, C.fx);
     ctx.fillStyle = vgrad(ctx, 1, 15, C.fxTitle);
-    ctx.fillRect(m.x + 1.5, 1.5, m.w - 3, 13.5);
-    rrect(ctx, m.x + 6, 4.5, 3, 7, 1);
+    ctx.fillRect(1, 1, m.w - 2, 14);
+    rrect(ctx, 6, 4.5, 3, 7, 1);
     ctx.fillStyle = m.accent;
     ctx.fill();
-    text(ctx, m.title, m.x + 13, 8.5, { size: 7, weight: 800, align: 'left', spacing: 1 });
+    text(ctx, m.title, 13, 8.5, { size: 7, weight: 800, align: 'left', spacing: 1 });
     if (m.toggle) {
-      const on = this.state.get(m.toggle) >= 0.5;
-      led(ctx, m.x + m.w - 22, 8, 2.3, on, m.accent);
-      text(ctx, 'ON', m.x + m.w - 16, 8.5, { size: 5.5, align: 'left', color: C.inkMuted });
+      led(ctx, m.w - 22, 8, 2.3, this.state.get(m.toggle) >= 0.5, m.accent);
+      text(ctx, 'ON', m.w - 16, 8.5, { size: 5.5, align: 'left', color: C.inkMuted });
     }
   }
 
   drawMixer(ctx, m) {
     const { state } = this;
-    const strip = (x0, label, levelParam, meters) => {
-      text(ctx, label, x0 + 28, 23, { size: 6.5, weight: 800 });
-      fader(ctx, x0 + 8, 62, 18, 50, state.get(levelParam));
-      meters.forEach((mx) => this.drawMeter(ctx, mx, 64, 0));
+    const faderH = m.h - 14 - FADER_Y;
+    const strip = (x0, label, levelParam) => {
+      text(ctx, label, x0 + CH_W / 2, 27, { size: 6.5, weight: 800 });
+      fader(ctx, x0 + 8, FADER_Y, 18, faderH, state.get(levelParam));
     };
 
     CHANNELS.forEach(([id, label], i) => {
-      const x0 = m.x + 6 + i * CH_W;
-      strip(x0, label, `mixer.${id}.level`, [x0 + 36]);
-      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      const x0 = 6 + i * CH_W;
+      strip(x0, label, `mixer.${id}.level`);
+      this.drawMeter(ctx, x0 + 36, FADER_Y + 2, faderH - 4, state.meters[id] ?? 0);
+      this.drawToggle(ctx, x0 + 6, 'M', state.get(`mixer.${id}.mute`) >= 0.5, C.ledOrange);
+      this.drawToggle(ctx, x0 + 31, 'S', state.get(`mixer.${id}.solo`) >= 0.5, C.ledGreen);
       ctx.lineWidth = 1;
-      line(ctx, x0 + CH_W - 1.5, 19, x0 + CH_W - 1.5, 114);
+      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
+      line(ctx, x0 + CH_W - 1.5, 20, x0 + CH_W - 1.5, m.h - 6);
       ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-      line(ctx, x0 + CH_W - 0.5, 19, x0 + CH_W - 0.5, 114);
+      line(ctx, x0 + CH_W - 0.5, 20, x0 + CH_W - 0.5, m.h - 6);
     });
 
-    const x0 = m.x + 6 + CHANNELS.length * CH_W;
-    strip(x0, 'MASTER', 'mixer.master.level', [x0 + 33, x0 + 42]);
-    text(ctx, 'L', x0 + 36, 41, { size: 5.5, color: C.inkMuted });
-    text(ctx, 'R', x0 + 45, 41, { size: 5.5, color: C.inkMuted });
+    const x0 = 6 + CHANNELS.length * CH_W;
+    strip(x0, 'MASTER', 'mixer.master.level');
+    const level = state.meters.master ?? 0;
+    this.drawMeter(ctx, x0 + 33, FADER_Y + 2, faderH - 4, level, 5);
+    this.drawMeter(ctx, x0 + 42, FADER_Y + 2, faderH - 4, level, 5);
+    text(ctx, 'L', x0 + 35.5, FADER_Y - 7, { size: 5.5, color: C.inkMuted });
+    text(ctx, 'R', x0 + 44.5, FADER_Y - 7, { size: 5.5, color: C.inkMuted });
   }
 
-  drawMeter(ctx, x, y, level) {
-    const lit = Math.round(level * METER_LEDS);
-    for (let i = 0; i < METER_LEDS; i++) {
-      const color = i >= METER_LEDS - 1 ? C.ledRed : i >= METER_LEDS - 3 ? C.ledYellow : C.ledGreen;
-      ledBar(ctx, x, y + (METER_LEDS - 1 - i) * 5.4, 6, 3.8, i < lit, color);
+  drawToggle(ctx, x, label, on, color) {
+    const face = on ? [shade(color, 0.3), color] : C.btnDark;
+    const off = button(ctx, x, 124, 21, 13, { face, pressed: on });
+    text(ctx, label, x + 10.5, 131 + off, { size: 7, weight: 800, color: on ? C.bassInk : C.inkLight });
+  }
+
+  drawMeter(ctx, x, y, h, level, w = 6) {
+    const count = Math.floor(h / 8);
+    const pitch = h / count;
+    const lit = Math.round(level * count);
+    for (let i = 0; i < count; i++) {
+      const color = i >= count - 1 ? C.ledRed : i >= count - 4 ? C.ledYellow : C.ledGreen;
+      ledBar(ctx, x, y + (count - 1 - i) * pitch, w, pitch - 2.5, i < lit, color);
     }
   }
 
-  drawDelay(ctx, m) {
-    const steps = 1 + Math.round(this.state.get('fx.delay.steps') * 7);
-    lcd(ctx, m.x + 12, 22, 40, 30);
-    sevenSeg(ctx, String(steps), m.x + 26, 27, 11, 20);
-    text(ctx, '1/16 STEPS', m.x + 32, 60, { size: 5.5, color: C.inkMuted });
+  drawDelay(ctx) {
+    const steps = String(1 + Math.round(this.state.get('fx.delay.steps') * 7));
+    lcd(ctx, 14, 26, 44, 42);
+    sevenSeg(ctx, steps, 14 + (44 - sevenSegWidth(steps, 13)) / 2, 34, 13, 26);
+    text(ctx, '1/16 STEPS', 36, 80, { size: 5.5, color: C.inkMuted, spacing: 0.5 });
   }
 
   drawTarget(ctx, m, target) {
-    lcd(ctx, m.x + 9, 86, m.w - 18, 15, C.lcdGreen);
-    text(ctx, `\u25B8 ${target}`, m.x + m.w / 2, 94, { size: 7, weight: 700, family: MONO, color: C.lcdGreenOn });
-    text(ctx, 'TARGET', m.x + m.w / 2, 110, { size: 5.5, color: C.inkMuted, spacing: 0.8 });
+    const x = 160;
+    const w = m.w - x - 14;
+    lcd(ctx, x, 36, w, 18, C.lcdGreen);
+    text(ctx, `\u25B8 ${target}`, x + w / 2, 45.5, { size: 7.5, family: MONO, color: C.lcdGreenOn });
+    text(ctx, 'TARGET', x + w / 2, 66, { size: 5.5, color: C.inkMuted, spacing: 0.8 });
   }
 
-  drawPcf(ctx, m) {
-    const x = m.x + 9;
-    const w = m.w - 18;
-    const y = 20;
-    const h = 40;
+  drawPcf(ctx) {
+    const x = 12;
+    const y = 24;
+    const w = 150;
+    const h = 64;
     lcd(ctx, x, y, w, h, C.lcdGreen);
-    text(ctx, `\u25B8 ${this.state.fx.pcfTarget}`, x + 4, y + 6.5, { size: 5.5, family: MONO, align: 'left', color: C.lcdGreenOn });
-    const bw = (w - 8) / 16;
-    const top = y + 13;
-    const maxH = h - 17;
+    text(ctx, `\u25B8 ${this.state.fx.pcfTarget}`, x + 5, y + 7, { size: 5.5, family: MONO, align: 'left', color: C.lcdGreenOn });
+    const bw = (w - 10) / 16;
+    const top = y + 15;
+    const maxH = h - 20;
     this.state.fx.pcf.forEach((v, i) => {
-      const bx = x + 4 + i * bw;
+      const bx = x + 5 + i * bw;
       ctx.fillStyle = C.lcdGreenDim;
-      ctx.fillRect(bx + 0.8, top, bw - 1.6, maxH);
+      ctx.fillRect(bx + 1, top, bw - 2, maxH);
       ctx.fillStyle = C.lcdGreenOn;
       const bh = Math.max(1, v * maxH);
-      ctx.fillRect(bx + 0.8, top + maxH - bh, bw - 1.6, bh);
+      ctx.fillRect(bx + 1, top + maxH - bh, bw - 2, bh);
     });
   }
+}
+
+function moduleRects([bass1, bass2, drum1, drum2], gap) {
+  const split = (b) => {
+    const top = Math.floor((b.h - gap) / 2);
+    return [
+      { y: b.y, h: top },
+      { y: b.y + top + gap, h: b.h - top - gap },
+    ];
+  };
+  const [delay, dist] = split(drum1);
+  const [comp, pcf] = split(drum2);
+  return { mixer: { y: bass1.y, h: bass2.y + bass2.h - bass1.y }, delay, dist, comp, pcf };
 }
