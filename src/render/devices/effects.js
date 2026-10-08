@@ -23,6 +23,8 @@ const CH_BUTTONS = [
   ['S', 'solo', C.ledGreen],
   ['D', 'dist', C.dist],
 ];
+const ROW_A = 117; // mute / solo
+const ROW_B = 133; // distortion / pattern filter / compressor routing
 const styleFor = (accent) => ({ ...KNOB.fx, pointers: [[accent, 0.22, 0.95, 0.15]] });
 
 // Right-hand column. Module rows line up with the instrument rows beside it
@@ -126,7 +128,7 @@ export class EffectsColumn {
       const x0 = 6 + i * CH_W;
       strip(x0, label, `mixer.${id}.level`);
       this.drawMeter(ctx, x0 + 36, FADER_Y + 2, faderH - 4, state.meters[id] ?? 0);
-      CH_BUTTONS.forEach(([name, k, color], b) => this.drawToggle(ctx, x0 + 4 + b * 17, name, `mixer.${id}.${k}`, color));
+      this.drawChannelButtons(ctx, x0, id, i);
       ctx.lineWidth = 1;
       ctx.strokeStyle = 'rgba(0,0,0,0.45)';
       line(ctx, x0 + CH_W - 1.5, 20, x0 + CH_W - 1.5, m.h - 6);
@@ -143,12 +145,31 @@ export class EffectsColumn {
     text(ctx, 'R', x0 + 44.5, FADER_Y - 7, { size: 5.5, color: C.inkMuted });
   }
 
-  drawToggle(ctx, x, label, param, color) {
-    const on = this.state.on01(param);
+  // Like ReBirth's mixer: DIST is per channel, while PCF and COMP place the single
+  // pattern filter / compressor on one channel (radio buttons). No channel COMP
+  // lit means the compressor works on the master bus.
+  drawChannelButtons(ctx, x0, id, i) {
+    const { state } = this;
+    const nComp = COMP_TARGETS.length;
+    const nPcf = PCF_TARGETS.length;
+    const pcfHere = state.choice('fx.pcf.target', nPcf) === i + 1;
+    const compHere = state.on01('fx.comp.routed') && state.choice('fx.comp.target', nComp) === i + 1;
+    const [mute, solo, dist] = CH_BUTTONS.map(([label, k, color]) => [label, `mixer.${id}.${k}`, color]);
+    this.drawButton(ctx, x0 + 4, ROW_A, 23, mute[0], state.on01(mute[1]), mute[2], () => state.toggle(mute[1]));
+    this.drawButton(ctx, x0 + 30, ROW_A, 23, solo[0], state.on01(solo[1]), solo[2], () => state.toggle(solo[1]));
+    this.drawButton(ctx, x0 + 4, ROW_B, 15, dist[0], state.on01(dist[1]), dist[2], () => state.toggle(dist[1]));
+    this.drawButton(ctx, x0 + 21, ROW_B, 15, 'P', pcfHere, C.pcf, () => state.setChoice('fx.pcf.target', pcfHere ? 0 : i + 1, nPcf));
+    this.drawButton(ctx, x0 + 38, ROW_B, 15, 'C', compHere, C.comp, () => {
+      state.set('fx.comp.routed', 1);
+      state.setChoice('fx.comp.target', compHere ? 0 : i + 1, nComp);
+    });
+  }
+
+  drawButton(ctx, x, y, w, label, on, color, onClick) {
     const face = on ? [shade(color, 0.3), color] : C.btnDark;
-    const off = button(ctx, x, 124, 15, 13, { face, pressed: on });
-    text(ctx, label, x + 7.5, 131 + off, { size: 7, weight: 800, color: on ? C.bassInk : C.inkLight });
-    hits.rect(ctx, x, 124, 15, 13, toggle(this.state, param));
+    const off = button(ctx, x, y, w, 13, { face, pressed: on });
+    text(ctx, label, x + w / 2, y + 7 + off, { size: 7, weight: 800, color: on ? C.bassInk : C.inkLight });
+    hits.rect(ctx, x, y, w, 13, click(onClick));
   }
 
   drawMeter(ctx, x, y, h, level, w = 6) {

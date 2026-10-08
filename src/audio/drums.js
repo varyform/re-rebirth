@@ -177,16 +177,20 @@ function cymbal(v, { level, decay, scale, hp, bp, noiseMix }) {
   }
 }
 
+// 808 voices fitted to a ReBirth test recording (knobs at centre unless noted).
 const R808 = {
-  bd: ['bd', (v, P) => kick(v, { base: 47 + P('tone') * 8, sweep: 2.2, sweepTime: 0.05, decay: 0.15 + P('decay') * 1.4, level: lvl(P('level')) * v.acc * 1.4, click: P('tone') * 0.35 })],
-  sd: ['sd', (v, P) => snare(v, { tones: [185, 330], toneDecay: 0.12, toneLevel: lvl(P('level')) * v.acc * (1.2 - P('tone') * 0.5), noiseHp: 1800, noiseLp: 6000 + P('tone') * 6000, noiseDecay: 0.18, noiseLevel: lvl(P('level')) * v.acc * P('snappy') * 0.8 })],
+  // ~57 Hz, -20 dB after ~170 ms at decay 64.
+  bd: ['bd', (v, P) => kick(v, { base: 50 + P('tone') * 6, sweep: 1.5, sweepTime: 0.03, decay: 0.15 + P('decay') * 0.75, level: lvl(P('level')) * v.acc * 1.4, click: P('tone') * 0.35 })],
+  sd: ['sd', (v, P) => snare(v, { tones: [185, 330], toneDecay: 0.12, toneLevel: lvl(P('level')) * v.acc * 1.27 * (1.2 - P('tone') * 0.5), noiseHp: 1800, noiseLp: 6000 + P('tone') * 6000, noiseDecay: 0.18, noiseLevel: lvl(P('level')) * v.acc * P('snappy') })],
   // Toms measured on isolated hits in a ReBirth recording: ~194/280/388 Hz at
   // tuning ~0.56, with almost no pitch sweep.
   lt: ['lt', (v, P) => tom(v, { hz: 180 * (0.8 + P('tuning') * 0.5), decay: 0.45, level: lvl(P('level')) * v.acc * 0.7, sweep: 1.04, sweepTime: 0.02 })],
-  mt: ['mt', (v, P) => tom(v, { hz: 260 * (0.8 + P('tuning') * 0.5), decay: 0.38, level: lvl(P('level')) * v.acc * 0.7, sweep: 1.04, sweepTime: 0.02 })],
+  mt: ['mt', (v, P) => tom(v, { hz: 260 * (0.8 + P('tuning') * 0.5), decay: 0.38, level: lvl(P('level')) * v.acc * 0.45, sweep: 1.04, sweepTime: 0.02 })],
   ht: ['ht', (v, P) => tom(v, { hz: 360 * (0.8 + P('tuning') * 0.5), decay: 0.2, level: lvl(P('level')) * v.acc * 0.7, sweep: 1.04, sweepTime: 0.02 })],
-  rs: ['rs', (v, P) => rim(v, lvl(P('level')) * v.acc)],
-  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 1.6, 1100, 0.2)],
+  // Rimshot energy sits above 1.5 kHz, -20 dB after ~45 ms.
+  rs: ['rs', (v, P) => ring(v, { partials: [[1700, 1], [2600, 0.45]], decay: 0.13, level: lvl(P('level')) * v.acc * 0.3, tick: 0.5, tickHz: 6000 })],
+  // The clap is bright: most energy above 4 kHz.
+  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 0.55, 9000, 0.14, 0.7)],
   // Measured on isolated hits: centred near 1 kHz, short in the mids.
   cb: ['cb', (v, P) => {
     const out = env(v, lvl(P('level')) * v.acc * 0.6, 0.12, 0.001);
@@ -197,9 +201,10 @@ const R808 = {
     }
     out.connect(v.out);
   }],
-  cy: ['cy', (v, P) => cymbal(v, { level: lvl(P('level')) * v.acc * 1.6, decay: 0.5 + P('decay') * 1.8, scale: 1, hp: 3000 + P('tone') * 4000, bp: 7000 + P('tone') * 3000, noiseMix: 0.2 })],
-  oh: ['oh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.15 + P('decay') * 0.6, body: 0.15, chokeable: true })],
-  ch: ['ch', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.2, decay: 0.045, choke: true })],
+  // -20 dB after ~175 ms at decay 100; little energy below 4 kHz at tone 0.
+  cy: ['cy', (v, P) => cymbal(v, { level: lvl(P('level')) * v.acc * 1.7, decay: 0.2 + P('decay') * 0.5, scale: 1, hp: 6000 + P('tone') * 3000, bp: 9000 + P('tone') * 2000, noiseMix: 0.2 })],
+  oh: ['oh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.6, decay: 0.15 + P('decay') * 0.6, hp: 8000, chokeable: true })],
+  ch: ['ch', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 2.9, decay: 0.045, hp: 8000, choke: true })],
 };
 
 // 909 voices fitted to a ReBirth test recording with every knob at centre
