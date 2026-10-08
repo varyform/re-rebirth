@@ -1,11 +1,17 @@
-// Visual 16th-note clock driven by requestAnimationFrame. Placeholder until the
-// audio engine schedules steps from the AudioContext clock.
+// Lookahead step scheduler on the AudioContext clock: a timer queues steps a
+// little ahead with sample-accurate times, and the UI catches up per frame by
+// popping steps whose time has passed — so lights match what you hear.
+const LOOKAHEAD = 0.12; // seconds scheduled ahead
+const INTERVAL = 25; // ms between scheduler runs
+const START_DELAY = 0.05;
+
 export class Clock {
-  constructor(state, onTick) {
+  constructor(state, engine) {
     this.state = state;
-    this.onTick = onTick;
+    this.engine = engine;
     this.pos = 0; // in steps since bar 1
-    this.raf = 0;
+    this.queue = [];
+    this.timer = 0;
   }
 
   get t() {
@@ -14,24 +20,26 @@ export class Clock {
 
   play() {
     if (this.t.playing) return;
+    const ctx = this.engine.start();
     this.t.playing = true;
     this.pos = (this.t.bar - 1) * 16;
-    this.t.step = -1;
-    this.last = performance.now();
-    this.sync();
-    this.raf = requestAnimationFrame(this.frame);
+    this.nextTime = ctx.currentTime + START_DELAY;
+    this.queue = [];
+    this.schedule();
+    this.timer = setInterval(this.schedule, INTERVAL);
   }
 
   // Stop twice to rewind to the start, like a hardware transport.
   stop() {
     if (this.t.playing) {
       this.t.playing = false;
-      cancelAnimationFrame(this.raf);
+      clearInterval(this.timer);
+      this.queue = [];
+      this.engine.stop();
     } else {
       this.t.bar = 1;
     }
     this.t.step = -1;
-    this.onTick();
   }
 
   toggle() {
@@ -43,24 +51,32 @@ export class Clock {
     const bar = Math.max(1, this.t.bar + delta);
     this.pos = (bar - 1) * 16 + (this.pos % 16);
     this.t.bar = bar;
-    if (this.t.playing) this.sync();
-    else this.onTick();
   }
 
-  frame = (now) => {
-    this.pos += (now - this.last) / (60000 / this.t.tempo / 4);
-    this.last = now;
-    this.sync();
-    this.raf = requestAnimationFrame(this.frame);
+  schedule = () => {
+    const { ctx } = this.engine;
+    while (this.nextTime < ctx.currentTime + LOOKAHEAD) {
+      const stepDur = this.engine.stepDuration();
+      const step = this.pos % 16;
+      this.engine.playStep(step, this.nextTime, stepDur);
+      this.queue.push({ time: this.nextTime, step, bar: Math.floor(this.pos / 16) + 1 });
+      this.pos++;
+      this.nextTime += stepDur;
+    }
   };
 
-  sync() {
-    const n = Math.floor(this.pos);
-    const step = n % 16;
-    const bar = Math.floor(n / 16) + 1;
-    if (step === this.t.step && bar === this.t.bar) return;
-    this.t.step = step;
-    this.t.bar = bar;
-    this.onTick();
+  // Per animation frame: advance the displayed position. Returns true if it moved.
+  update() {
+    if (!this.t.playing || !this.queue.length) return false;
+    const { ctx } = this.engine;
+    const heard = ctx.currentTime - (ctx.outputLatency || 0);
+    let moved = false;
+    while (this.queue.length && this.queue[0].time <= heard) {
+      const { step, bar } = this.queue.shift();
+      this.t.step = step;
+      this.t.bar = bar;
+      moved = true;
+    }
+    return moved;
   }
 }

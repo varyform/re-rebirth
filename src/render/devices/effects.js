@@ -1,3 +1,4 @@
+import { CHANNELS, TARGETS } from '../../channels.js';
 import { hits } from '../../ui/hits.js';
 import { click, faderDrag, knobDrag, toggle } from '../../ui/handlers.js';
 import { Knob } from '../controls.js';
@@ -12,14 +13,6 @@ const MODULES = [
   { key: 'pcf', title: 'PATTERN FILTER', accent: C.pcf, toggle: 'fx.pcf.on' },
 ];
 
-export const CHANNELS = [
-  ['bass1', 'BASS 1'],
-  ['bass2', 'BASS 2'],
-  ['r808', 'DRUM 08'],
-  ['r909', 'DRUM 09'],
-];
-
-const TARGETS = [...CHANNELS.map(([, label]) => label), 'MASTER'];
 const CH_W = 58;
 const FADER_Y = 150;
 const FADER_CAP = 11;

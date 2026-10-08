@@ -1,4 +1,5 @@
 import './style.css';
+import { AudioEngine } from './audio/engine.js';
 import { Rack } from './render/rack.js';
 import { Clock } from './sequencer/clock.js';
 import { State } from './state.js';
@@ -8,7 +9,8 @@ import { attachPointer } from './ui/pointer.js';
 const canvas = document.getElementById('rack');
 const ctx = canvas.getContext('2d');
 const state = new State();
-const clock = new Clock(state, requestRender);
+const engine = new AudioEngine(state);
+const clock = new Clock(state, engine);
 const rack = new Rack(state, clock);
 
 let frame = 0;
@@ -23,6 +25,15 @@ function render() {
   ctx.setTransform(canvas.width / rack.width, 0, 0, canvas.height / rack.height, 0, 0);
   hits.clear();
   rack.draw(ctx);
+}
+
+// Pushes knob changes to the audio graph and pulls playhead/meter updates back.
+function animate() {
+  engine.sync();
+  const moved = clock.update();
+  const metered = engine.updateMeters();
+  if (moved || metered) requestRender();
+  requestAnimationFrame(animate);
 }
 
 // Scale to fit the window while keeping the aspect ratio, never below 1:1.
@@ -55,9 +66,11 @@ window.addEventListener('keydown', (e) => {
   if (e.code !== 'Space' || e.repeat) return;
   e.preventDefault();
   clock.toggle();
+  requestRender();
 });
 
 attachPointer(canvas, requestRender);
 window.addEventListener('resize', resize);
 watchPixelRatio();
 resize();
+animate();
