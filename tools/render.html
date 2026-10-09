@@ -34,6 +34,7 @@
       let now = 0;
       Object.defineProperty(ctx, 'currentTime', {get: () => now});
       engine.build(ctx);
+      await engine.ready;
       engine.start = () => ctx;
       if (solo) {
         // Silence other devices by stripping their tracks and switching them off.

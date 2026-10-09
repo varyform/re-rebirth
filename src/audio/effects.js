@@ -1,3 +1,5 @@
+import { COMPRESSOR } from './compressor.js';
+
 export const INSERTS = ['dist', 'comp', 'pcf'];
 // Pattern filter modes: 0 = bandpass, 1 = lowpass.
 export const PCF_TYPES = ['bandpass', 'lowpass'];
@@ -45,28 +47,6 @@ export const foldCurve = (shape) =>
     return DIST.foldAmp * Math.sin(g * v) + DIST.foldDry * (1 - shape) ** DIST.foldDryPow * v;
   }, 4096);
 
-// DynamicsCompressorNode applies its own makeup gain, from its static curve:
-// (1 / the curve's gain at 0 dBFS)^0.6. Ported from Blink's DynamicsCompressorKernel
-// (Firefox uses the same code), so it can be divided out exactly.
-export function builtinMakeupDb(thresholdDb, kneeDb, ratio) {
-  const lin = (db) => 10 ** (db / 20);
-  const db = (x) => 20 * Math.log10(x);
-  const t = lin(thresholdDb);
-  const knee = (x, k) => (x < t ? x : t + (1 - Math.exp(-k * (x - t))) / k);
-  const slopeAt = (x, k) => (x < t ? 1 : (db(knee(x * 1.001, k)) - db(knee(x, k))) / (db(x * 1.001) - db(x)));
-  const kneeTop = lin(thresholdDb + kneeDb);
-  let lo = 0.1;
-  let hi = 10000;
-  let k = 5;
-  for (let i = 0; i < 15; i++) {
-    if (slopeAt(kneeTop, k) < 1 / ratio) hi = k;
-    else lo = k;
-    k = Math.sqrt(lo * hi);
-  }
-  const kneeTopOut = db(knee(kneeTop, k));
-  const full = 1 < kneeTop ? knee(1, k) : lin(kneeTopOut + (0 - (thresholdDb + kneeDb)) / ratio);
-  return -0.6 * db(full);
-}
 
 function onePoleLowpass(ctx, hz) {
   const p = Math.exp((-2 * Math.PI * hz) / ctx.sampleRate);
@@ -105,13 +85,20 @@ const makers = {
     input.connect(drive.fold).connect(fold).connect(onePoleLowpass(ctx, DIST.foldLowpass)).connect(mix.fold).connect(out);
     return { in: input, out, drive, mix, fold };
   },
+  // in -> compressor worklet -> out. Until its module has loaded (attach), in
+  // passes straight through.
   comp(ctx) {
-    const pre = ctx.createGain();
-    const comp = ctx.createDynamicsCompressor();
-    comp.knee.value = 0;
+    const input = ctx.createGain();
     const out = ctx.createGain();
-    pre.connect(comp).connect(out);
-    return { in: pre, out, pre, comp, makeup: out };
+    input.connect(out);
+    const fx = { in: input, out, node: null, reduction: 0 };
+    fx.attach = () => {
+      fx.node = new AudioWorkletNode(ctx, COMPRESSOR);
+      fx.node.port.onmessage = (e) => (fx.reduction = e.data);
+      input.disconnect(out);
+      input.connect(fx.node).connect(out);
+    };
+    return fx;
   },
   pcf(ctx) {
     const filter = ctx.createBiquadFilter();

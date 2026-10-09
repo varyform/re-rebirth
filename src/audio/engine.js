@@ -10,7 +10,8 @@ import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { BASS_IDS, DRUM_IDS, HIT } from '../state.js';
 import { BassVoice } from './bass-voice.js';
 import { KITS, playHit } from './drums.js';
-import { builtinMakeupDb, createDelay, DIST, distDrive, foldCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
+import { loadCompressor } from './compressor.js';
+import { createDelay, DIST, distDrive, foldCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
 import { PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent', 'volume', 'waveform'];
@@ -59,15 +60,13 @@ function compCurve(threshold, amount) {
   const thresholdDb = Math.max(-48.94, 20 * Math.log10(Math.max(threshold, 1e-6)) + COMP_TOP_DB);
   const slope = 0.978 * amount ** 1.34; // 1 - 1/ratio
   const makeupDb = amount * (0.077 * (COMP_TOP_DB - thresholdDb) ** 1.57 - 2.31);
-  return { thresholdDb, ratio: 1 / (1 - slope), makeupDb };
+  return { thresholdDb, slope, makeupDb };
 }
-// Export dB (master 100) -> the compressor's input: the master bus runs 10 dB
-// hotter (master fader and volume follow it), a channel 3 dB hotter still (before
-// the pan), and ReBirth's channel compressor measured 2 dB less sensitive.
-const COMP_CREST_DB = 5.5;
-const COMP_IN_DB = { master: 9.97 + COMP_CREST_DB, channel: 9.97 + COMP_CREST_DB + 3 + 2 };
-// Web Audio thresholds stop at 0 dB: the compressor runs this much lower inside.
-const COMP_HEADROOM_DB = 30;
+// The compressor's input level -> the export's dB (master 100) the curve was fitted
+// on. Fitted too (the gain stages after the master bus only explain -10 dB of it);
+// a channel runs 3 dB hotter (before the pan) and ReBirth's channel compressor
+// measured another 4 dB less sensitive.
+const COMP_OFFSET_DB = { master: -3.67, channel: -3.67 - 3 - 4 };
 
 export class AudioEngine {
   constructor(state) {
@@ -138,6 +137,13 @@ export class AudioEngine {
     this.kits = Object.fromEntries(DRUM_IDS.map((id) => [id, {}]));
     this.meterBuf = new Float32Array(512);
     this.sync();
+    // The compressor is an AudioWorklet; until it loads, its stages pass audio through.
+    this.ready = loadCompressor(ctx)
+      .then(() => {
+        for (const chain of this.chains()) chain.stages.comp.fx.attach();
+        this.syncInserts();
+      })
+      .catch((e) => console.warn('Compressor unavailable:', e));
   }
 
   // Left/right peak meters on a stereo signal.
@@ -325,19 +331,14 @@ export class AudioEngine {
       set(dist.drive.fold.gain, drive / (DIST.foldClip * DIST.ref));
       set(dist.mix.clip.gain, folds ? 0 : DIST.clip * DIST.ref);
       set(dist.mix.fold.gain, folds ? DIST.ref : 0);
-      // The built-in compressor adds its own makeup gain; undo it so only ours applies.
-      const { comp, pre, makeup } = chain.stages.comp.fx;
-      // Web Audio's knee starts at the threshold; the fitted one is centred on it.
-      const thresholdDb = curve.thresholdDb - COMP_KNEE_DB / 2 + (chain === this.masterInserts ? COMP_IN_DB.master : COMP_IN_DB.channel) - COMP_HEADROOM_DB;
-      const builtinDb = builtinMakeupDb(thresholdDb, COMP_KNEE_DB, curve.ratio);
-      set(pre.gain, 10 ** (-COMP_HEADROOM_DB / 20));
-      set(comp.threshold, thresholdDb);
-      set(comp.knee, COMP_KNEE_DB);
-      set(comp.ratio, curve.ratio);
-      // ReBirth: the gain falls ~10 dB in 150 ms and recovers ~10 dB in 60 ms.
-      set(comp.attack, 0.003);
-      set(comp.release, 0.25);
-      set(makeup.gain, 10 ** ((curve.makeupDb - builtinDb + COMP_HEADROOM_DB) / 20));
+      const comp = chain.stages.comp.fx.node?.parameters;
+      if (comp) {
+        set(comp.get('thresholdDb'), curve.thresholdDb);
+        set(comp.get('kneeDb'), COMP_KNEE_DB);
+        set(comp.get('slope'), curve.slope);
+        set(comp.get('makeupDb'), curve.makeupDb);
+        set(comp.get('offsetDb'), chain === this.masterInserts ? COMP_OFFSET_DB.master : COMP_OFFSET_DB.channel);
+      }
       const filter = chain.stages.pcf.fx.filter;
       if (filter.type !== type) filter.type = type;
       // Q is in dB for lowpass, linear for bandpass. The bandpass is fairly
@@ -477,7 +478,7 @@ export class AudioEngine {
     this.fxLevels.dist = Math.max(dist, this.fxLevels.dist - 0.025);
     fx.dist = this.fxLevels.dist;
     const comp = this.compChain();
-    fx.compReduction = comp ? comp.stages.comp.fx.comp.reduction : 0;
+    fx.compReduction = comp ? comp.stages.comp.fx.reduction : 0;
     const pcf = this.pcfChain();
     fx.pcfHz = pcf ? pcf.stages.pcf.fx.filter.frequency.value : null;
     // Round so idle meters don't trigger redraws every frame.

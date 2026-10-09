@@ -16,7 +16,7 @@
 - **Effects measured against ReBirth.** A second test song ran a steady tone through every effect setting:
   - Delay: echoes now land on ReBirth's timing. Steps count sixteenths, and the triplet mode counts eighth-note triplets, so the classic 3-step delay is a dotted eighth again. Feedback halves each repeat at 64 and repeats forever at full, echoes keep their tone, and the send is gentler.
   - Distortion: shape 0 is ReBirth's 1.5-mode hard clipper; higher shapes fold the wave over more and more. Amount drives harder, up to +24 dB, without evening out the level.
-  - Compressor: threshold works the right way round (turning it down compresses more, as on ReBirth), with ReBirth's ratio, knee and makeup gain.
+  - Compressor: threshold works the right way round (turning it down compresses more, as on ReBirth), with ReBirth's ratio, knee and makeup gain. It's our own compressor now: like ReBirth's it follows the average level rather than peaks, with ReBirth's attack and release, so drum-heavy mixes are no longer squashed and transients survive.
   - Channel faders follow ReBirth's curve: even steps in dB, so lower settings are much quieter than before.
 
 ### Fixed
