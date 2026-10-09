@@ -27,6 +27,17 @@ export class Files {
     }
   }
 
+  // A song shipped with the app (public/songs), opened like a picked file.
+  async openUrl(url, name) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`download failed (${res.status})`);
+      await this.open(new File([await res.arrayBuffer()], name));
+    } catch (err) {
+      this.onError?.(err, { name });
+    }
+  }
+
   newSong() {
     this.beforeLoad?.();
     this.state.clearSong();

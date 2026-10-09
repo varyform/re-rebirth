@@ -23,6 +23,9 @@ const COPY = {
   songsLabel: 'More songs:',
   songsUrl: 'https://nordbeat.com/archive/rebirth/song_archives.htm',
   songsText: 'nordbeat.com/archive/rebirth',
+  demoLabel: "LOAD TGV'S KILOMIX '98",
+  demoName: "TGV's KiloMix '98.rbs",
+  demoUrl: `${import.meta.env.BASE_URL}songs/tgv-kilomix-98.rbs`,
 };
 
 export function openAbout(state) {
@@ -33,7 +36,8 @@ export function closeAbout(state) {
   state.ui.about = false;
 }
 
-export function drawAbout(ctx, rackW, rackH, state) {
+// app: { files } for the built-in example song.
+export function drawAbout(ctx, rackW, rackH, state, app) {
   // Dim the rack; a click anywhere outside the window closes it.
   ctx.fillStyle = 'rgba(0,0,0,0.6)';
   ctx.fillRect(0, 0, rackW, rackH);
@@ -72,11 +76,21 @@ export function drawAbout(ctx, rackW, rackH, state) {
   lcd(ctx, 18, 182, W - 36, 18, C.lcd);
   text(ctx, COPY.keys, W / 2, 191.5, { size: 5.8, weight: 700, family: MONO, color: C.lcdOn });
 
-  const bw = 70;
-  const bx = (W - bw) / 2;
-  const off = button(ctx, bx, 212, bw, 22, { pressed: hits.isPressed('about.close') });
-  text(ctx, 'CLOSE', W / 2, 223.5 + off, { size: 7, weight: 800, spacing: 1.2 });
-  hits.rect(ctx, bx, 212, bw, 22, click(() => closeAbout(state), 'about.close'));
+  // An example song is one click away, no file to pass around.
+  const loadW = 132;
+  const closeW = 70;
+  const lx = (W - loadW - 10 - closeW) / 2;
+  const loadOff = button(ctx, lx, 212, loadW, 22, { pressed: hits.isPressed('about.demo') });
+  text(ctx, COPY.demoLabel, lx + loadW / 2, 223.5 + loadOff, { size: 6.5, weight: 800, spacing: 0.8 });
+  const loadDemo = () => {
+    closeAbout(state);
+    app.files.openUrl(COPY.demoUrl, COPY.demoName);
+  };
+  hits.rect(ctx, lx, 212, loadW, 22, click(loadDemo, 'about.demo'));
+  const cx = lx + loadW + 10;
+  const off = button(ctx, cx, 212, closeW, 22, { pressed: hits.isPressed('about.close') });
+  text(ctx, 'CLOSE', cx + closeW / 2, 223.5 + off, { size: 7, weight: 800, spacing: 1.2 });
+  hits.rect(ctx, cx, 212, closeW, 22, click(() => closeAbout(state), 'about.close'));
   ctx.restore();
 }
 
