@@ -1,6 +1,6 @@
 import { songBars, TICKS_PER_BAR } from '../../song/song.js';
 import { hits } from '../../ui/hits.js';
-import { click } from '../../ui/handlers.js';
+import { click, repeat } from '../../ui/handlers.js';
 import { Knob } from '../controls.js';
 import { brushed, button, FONT, icon, lcd, led, MONO, panel, screws, sevenSeg, sevenSegWidth, text, vgrad } from '../primitives.js';
 import { C, KNOB } from '../theme.js';
@@ -21,8 +21,8 @@ export class Transport {
     Object.assign(this, { state, app, x, y, w, h });
     const { clock } = app;
     this.actions = {
-      rew: () => clock.seekBar(-1),
-      ff: () => clock.seekBar(1),
+      rew: (bars) => clock.seekBar(-bars),
+      ff: (bars) => clock.seekBar(bars),
       stop: () => clock.stop(),
       play: () => clock.play(),
       rec: () => clock.setRec(!state.transport.rec),
@@ -71,7 +71,9 @@ export class Transport {
       const active = lights[kind]?.[0] ?? false;
       const held = active || hits.isPressed(key);
       const off = button(ctx, bx, 24, 30, 26, { face: held ? C.btnPressed : C.btnDark, pressed: held });
-      hits.rect(ctx, bx, 24, 30, 26, click(this.actions[kind], key));
+      // REW / FF repeat while held, speeding up; the rest act once per click.
+      const seeks = kind === 'rew' || kind === 'ff';
+      hits.rect(ctx, bx, 24, 30, 26, seeks ? repeat(this.actions[kind], key) : click(this.actions[kind], key));
       const iconColor = kind === 'rec' ? C.ledRed : kind === 'play' && t.playing ? C.ledGreen : C.inkLight;
       icon(ctx, kind, bx + 15, 37 + off, 10, iconColor);
       text(ctx, label, bx + 15, 61, LABEL);

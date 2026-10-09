@@ -73,7 +73,12 @@ export class Clock {
   }
 
   seekBar(delta) {
-    const bar = Math.max(1, this.t.bar + delta);
+    // While playing, the displayed bar trails the scheduler by the lookahead, so
+    // repeated seeks (held REW/FF) count from the scheduler's position.
+    const from = this.t.playing ? Math.floor(this.pos / 16) + 1 : this.t.bar;
+    const song = this.state.song;
+    const last = this.songMode && song.length ? Math.ceil(song.length / TICKS_PER_BAR) : Infinity;
+    const bar = Math.min(last, Math.max(1, from + delta));
     this.t.bar = bar;
     if (this.t.playing) {
       // Steps already queued still play; the jump lands right after them.

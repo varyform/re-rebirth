@@ -43,6 +43,37 @@ export function click(fn, key) {
 
 export const toggle = (state, param, key) => click(() => state.toggle(param), key);
 
+const REPEAT_DELAY = 400; // ms before a held button starts repeating
+const REPEAT_EVERY = 120; // ms between repeats
+// Repeats per tick by seconds held: speeds up the longer the button is down.
+const REPEAT_RAMP = [
+  [0, 1],
+  [1.2, 2],
+  [2.4, 4],
+  [3.6, 8],
+];
+
+// Button that acts once on press, then repeats with growing steps while held.
+// fn(count) receives how many units to move this time.
+export function repeat(fn, key) {
+  return {
+    cursor: 'pointer',
+    key,
+    down(ev) {
+      fn(1);
+      const start = performance.now();
+      let timer = setTimeout(function tick() {
+        const held = (performance.now() - start) / 1000;
+        const count = REPEAT_RAMP.findLast(([from]) => held >= from)[1];
+        fn(count);
+        ev.redraw?.();
+        timer = setTimeout(tick, REPEAT_EVERY);
+      }, REPEAT_DELAY);
+      return { up: () => clearTimeout(timer) };
+    },
+  };
+}
+
 const stepIndex = (x, x0, stepW, count) => {
   const i = Math.floor((x - x0) / stepW);
   return i >= 0 && i < count ? i : -1;
