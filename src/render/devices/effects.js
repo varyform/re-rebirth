@@ -1,10 +1,10 @@
-import { DELAY_STEPS } from '../../audio/engine.js';
+import { COMP_KNEE_DB, compCurve, DELAY_STEPS } from '../../audio/engine.js';
 import { PCF_WAVE_COUNT, PCF_WAVES } from '../../audio/pcf-waves.js';
 import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../../channels.js';
 import { hits } from '../../ui/hits.js';
 import { click, knobDrag, toggle } from '../../ui/handlers.js';
 import { Knob } from '../controls.js';
-import { brushed, button, icon, lcd, led, ledBar, MONO, panel, rrect, sevenSeg, sevenSegWidth, shade, text, vgrad } from '../primitives.js';
+import { brushed, button, circle, icon, lcd, led, ledBar, line, MONO, panel, rgba, rrect, sevenSeg, sevenSegWidth, shade, text, vgrad } from '../primitives.js';
 import { C } from '../theme.js';
 import { spectrumDisplay } from '../spectrum.js';
 import { vuMeter } from '../vu-meter.js';
@@ -183,21 +183,143 @@ export class EffectsColumn {
     text(ctx, 'OUTPUT', x + w / 2, 74, { size: 5.5, color: C.inkMuted, spacing: 0.6 });
   }
 
-  // Gain-reduction meter (2 dB per LED) plus where the compressor sits. Routing
-  // is set with the COMP buttons on the channel strips and the master module.
+  // One screen: the compressor's transfer curve (input dB across, output dB up),
+  // drawn from the knobs, with a dot riding it at the live level; beside it the
+  // gain reduction scrolling by, ducking down from the top. Routing is set with
+  // the COMP buttons on the channel strips and the master module.
   drawComp(ctx, m) {
     const { state } = this;
+    const fx = this.fxMeters();
     const x = 160 * this.k;
     const w = m.w - x - 14;
-    const routed = state.on01('fx.comp.routed');
-    const where = !state.on01('fx.comp.on') || !routed ? 'OFF' : COMP_TARGETS[state.choice('fx.comp.target', COMP_TARGETS.length)];
-    lcd(ctx, x, 26, w, 18, C.lcdGreen);
-    text(ctx, `ON ${where}`, x + w / 2, 35.5, { size: 7, family: MONO, color: C.lcdGreenOn });
-    const reduction = -(this.fxMeters().compReduction ?? 0);
-    const count = 12;
-    this.ledRow(ctx, x, 54, w, count, Math.min(count, Math.round(reduction / 2)), { yellowFrom: 6, redFrom: 9 });
-    [['0', 0], ['6', 3], ['12', 6], ['24', 12]].forEach(([label, i]) => text(ctx, label, x + (i * w) / count - (i === count ? 3 : 0), 64, { size: 5, color: C.inkMuted }));
-    text(ctx, `GAIN REDUCTION ${reduction.toFixed(1)} dB`, x + w / 2, 74, { size: 5.5, color: C.inkMuted, spacing: 0.4 });
+    const y = 22;
+    const h = 56;
+    const on = state.on01('fx.comp.on') && state.on01('fx.comp.routed');
+    const where = on ? COMP_TARGETS[state.choice('fx.comp.target', COMP_TARGETS.length)] : 'OFF';
+    lcd(ctx, x, y, w, h, C.lcdGreen);
+    const s = h - 8;
+    this.drawCompCurve(ctx, x + 4, y + 4, s, on, fx);
+    const hx = x + s + 10;
+    this.drawCompHistory(ctx, hx, y + 4, x + w - 4 - hx, s, on, fx.compHistory ?? []);
+    const reduction = -(fx.compReduction ?? 0);
+    text(ctx, on ? `ON ${where}  ·  GR ${reduction.toFixed(1)} dB` : 'NOT ROUTED', x + w / 2, y + h + 8, { size: 5.5, color: C.inkMuted, spacing: 0.4 });
+  }
+
+  drawCompCurve(ctx, x, y, s, on, fx) {
+    const LO = -60; // dB at the plot's left / bottom; 0 dB at the right / top
+    const px = (db) => x + ((db - LO) / -LO) * s;
+    const py = (db) => y + s - ((db - LO) / -LO) * s;
+    const { thresholdDb: T, slope, makeupDb } = compCurve(this.state.get('fx.comp.threshold'), this.state.get('fx.comp.amount'));
+    const out = (db) => {
+      const over = db - T;
+      const k = COMP_KNEE_DB;
+      const red = over > k / 2 ? over : over < -k / 2 ? 0 : (over + k / 2) ** 2 / (2 * k);
+      return db + makeupDb - slope * red;
+    };
+
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(x, y, s, s);
+    ctx.clip();
+    // Grid every 12 dB, the 1:1 line, and the threshold.
+    ctx.strokeStyle = rgba(C.lcdGreenDim, 0.35);
+    ctx.lineWidth = 0.5;
+    for (let db = LO + 12; db < 0; db += 12) {
+      line(ctx, px(db), y, px(db), y + s);
+      line(ctx, x, py(db), x + s, py(db));
+    }
+    ctx.setLineDash([1.5, 1.5]);
+    ctx.strokeStyle = rgba(C.lcdGreenDim, 0.8);
+    line(ctx, px(LO), py(LO), px(0), py(0));
+    ctx.strokeStyle = rgba(C.ledYellow, on ? 0.55 : 0.2);
+    line(ctx, px(T), y, px(T), y + s);
+    ctx.setLineDash([]);
+
+    // The curve, glowing while routed.
+    const trace = () => {
+      ctx.beginPath();
+      for (let db = LO; db <= 0; db += 0.5) {
+        const fn = db === LO ? 'moveTo' : 'lineTo';
+        ctx[fn](px(db), py(out(db)));
+      }
+    };
+    if (on) {
+      trace();
+      ctx.strokeStyle = rgba(C.lcdGreenOn, 0.25);
+      ctx.lineWidth = 3;
+      ctx.stroke();
+    }
+    trace();
+    ctx.strokeStyle = on ? C.lcdGreenOn : C.lcdGreenDim;
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    // The live level: a dot on the curve (with the actual, smoothed gain) and a
+    // fading trail of where it just was.
+    if (on) {
+      const trail = fx.compTrail ?? [];
+      trail.forEach((p, i) => {
+        if (!p) return;
+        const a = ((i + 1) / trail.length) * 0.45;
+        ctx.fillStyle = rgba(C.lcdGreenOn, a);
+        circle(ctx, px(p[0]), py(p[0] + p[1]), 1 + a * 2);
+        ctx.fill();
+      });
+      if (fx.compLevel !== null && fx.compLevel !== undefined) {
+        const cx = px(fx.compLevel);
+        const cy = py(fx.compLevel + fx.compGain);
+        const hot = -(fx.compReduction ?? 0) > 12 ? C.ledRed : -(fx.compReduction ?? 0) > 3 ? C.ledYellow : C.lcdGreenOn;
+        const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, 7);
+        glow.addColorStop(0, rgba(hot, 0.8));
+        glow.addColorStop(1, rgba(hot, 0));
+        ctx.fillStyle = glow;
+        ctx.fillRect(cx - 7, cy - 7, 14, 14);
+        ctx.fillStyle = '#ffffff';
+        circle(ctx, cx, cy, 1.4);
+        ctx.fill();
+      }
+    }
+    ctx.restore();
+    text(ctx, 'IN', x + s - 1, y + s - 3, { size: 4.5, align: 'right', family: MONO, color: C.lcdGreenDim });
+    text(ctx, 'OUT', x + 1.5, y + 3.5, { size: 4.5, align: 'left', family: MONO, color: C.lcdGreenDim });
+  }
+
+  // Gain reduction over the last ~3 s, newest on the right: 0 dB at the top,
+  // 24 dB at the bottom, coloured by depth.
+  drawCompHistory(ctx, x, y, w, h, on, history) {
+    const MAX = 24;
+    ctx.strokeStyle = rgba(C.lcdGreenDim, 0.35);
+    ctx.lineWidth = 0.5;
+    for (const db of [6, 12, 18]) line(ctx, x, y + (db / MAX) * h, x + w, y + (db / MAX) * h);
+    const n = Math.min(history.length, Math.max(2, Math.floor(w / 1.5)));
+    const pts = history.slice(-n);
+    const dx = w / (n - 1);
+    if (on && pts.some((v) => v > 0)) {
+      const depth = (v) => y + (Math.min(MAX, v) / MAX) * h;
+      ctx.beginPath();
+      ctx.moveTo(x, y);
+      pts.forEach((v, i) => ctx.lineTo(x + i * dx, depth(v)));
+      ctx.lineTo(x + w, y);
+      ctx.closePath();
+      const g = ctx.createLinearGradient(0, y, 0, y + h);
+      g.addColorStop(0, rgba(C.lcdGreenOn, 0.55));
+      g.addColorStop(0.45, rgba(C.ledYellow, 0.6));
+      g.addColorStop(1, rgba(C.ledRed, 0.7));
+      ctx.fillStyle = g;
+      ctx.fill();
+      ctx.beginPath();
+      pts.forEach((v, i) => ctx[i ? 'lineTo' : 'moveTo'](x + i * dx, depth(v)));
+      ctx.strokeStyle = C.lcdGreenOn;
+      ctx.lineWidth = 0.8;
+      ctx.stroke();
+    }
+    ctx.strokeStyle = on ? C.lcdGreenMid : C.lcdGreenDim;
+    ctx.lineWidth = 0.8;
+    line(ctx, x, y, x + w, y);
+    [['0', 0], ['12', 12], ['24', 24]].forEach(([label, db]) =>
+      text(ctx, label, x + w - 1, y + (db / MAX) * h + (db ? -2.5 : 3.5), { size: 4.5, align: 'right', family: MONO, color: C.lcdGreenDim }),
+    );
+    text(ctx, 'GR', x + 1, y + h - 2.5, { size: 4.5, align: 'left', family: MONO, color: C.lcdGreenDim });
   }
 
   // Click the readout to cycle a routing choice.

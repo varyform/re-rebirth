@@ -91,10 +91,10 @@ const makers = {
     const input = ctx.createGain();
     const out = ctx.createGain();
     input.connect(out);
-    const fx = { in: input, out, node: null, reduction: 0 };
+    const fx = { in: input, out, node: null, meter: { level: -Infinity, gain: 0, makeup: 0 } };
     fx.attach = () => {
       fx.node = new AudioWorkletNode(ctx, COMPRESSOR);
-      fx.node.port.onmessage = (e) => (fx.reduction = e.data);
+      fx.node.port.onmessage = (e) => (fx.meter = e.data);
       input.disconnect(out);
       input.connect(fx.node).connect(out);
     };

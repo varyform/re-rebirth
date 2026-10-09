@@ -40,10 +40,12 @@ const AC_DEPTH = { r808: 0.8, r909: 6 };
 const INPUT_GAIN = { bass1: 1, bass2: 1, r808: 0.55, r909: 0.55 };
 export const CHANNEL_TRIM_DB = { bass1: 0, bass2: 0, r808: 0, r909: 0 };
 
-// Channel faders: linear in dB, 0.367 dB per step of 127 (measured
-// in a ReBirth export: 11.7 dB per 32 steps, 32 dB from 40 to 127), unity at the top.
+// Channel faders: linear in dB, 0.367 dB per step of 127, unity at the top
+// (measured in a ReBirth export: 11.7 dB per 32 steps, 32 dB from 40 to 127).
 const faderGain = (v) => (v > 0 ? 10 ** ((-0.367 * 127 * (1 - v)) / 20) : 0);
-// Master fader: not measured yet.
+// Master fader: unresolved. A test export lost 7.4 dB from 100 to 80 (as steep as
+// the channels), but full-song exports at master 97..104 sit as if the top of the
+// range were much flatter; v * v fits those, and the voices were calibrated with it.
 const masterGain = (v) => v * v;
 
 // Compressor, fitted to a ReBirth export of a steady tone with the fader stepping
@@ -55,18 +57,52 @@ const masterGain = (v) => v * v;
 //  amount: the ratio, 1:1 at 0 to ~45:1 at the top; soft knee, 7 dB wide
 //  makeup: grows with how low the threshold sits, -2.3 dB at the top (x amount)
 const COMP_TOP_DB = -14.94;
-const COMP_KNEE_DB = 7.1;
-function compCurve(threshold, amount) {
+export const COMP_KNEE_DB = 7.1;
+export function compCurve(threshold, amount) {
   const thresholdDb = Math.max(-48.94, 20 * Math.log10(Math.max(threshold, 1e-6)) + COMP_TOP_DB);
   const slope = 0.978 * amount ** 1.34; // 1 - 1/ratio
   const makeupDb = amount * (0.077 * (COMP_TOP_DB - thresholdDb) ** 1.57 - 2.31);
   return { thresholdDb, slope, makeupDb };
 }
+// Pattern filter, fitted to a ReBirth export of a bright tone through it (static
+// settings, then the envelope): a 2-pole lowpass or bandpass. The frequency knob
+// spans ~10 Hz to ~14 kHz, 2.5 octaves per 32 steps. Resonance raises Q (more so
+// higher up) and nudges the frequency up; the lowpass's level falls with it while
+// the bandpass's peak rises. Tables are at resonance 0/32/64/96/127, frequency 64.
+const PCF_Q = [0.7, 1.11, 2.06, 4.7, 7.5];
+const PCF_HZ_SHIFT = [0.99, 0.94, 1, 1.11, 1.17];
+const PCF_LP_DB = [4.5, 2, -1.6, -4.1, -4.1];
+const PCF_BP_DB = [5, 6.5, 8.2, 12.8, 16.9];
+const PCF_ENV_OCTAVES = 9.5;
+// Envelope time constants at decay 0/32/64/96; 127 holds.
+const PCF_DECAY = [0.01, 0.025, 0.18, 0.9, 1e5];
+function lerpTable(table, v, log = false) {
+  const x = Math.min(1, Math.max(0, v)) * (table.length - 1);
+  const i = Math.min(table.length - 2, Math.floor(x));
+  const [a, b] = [table[i], table[i + 1]];
+  return log ? a * (b / a) ** (x - i) : a + (b - a) * (x - i);
+}
+const pcfDecay = (decay) => lerpTable(PCF_DECAY, decay, true);
+function pcfShape(freq, reso) {
+  const octaves = (freq * 127 - 64) / 32; // from the middle, in 32-step units
+  // Away from the middle, with resonance: measured at 64, 32 steps either way.
+  const r = Math.min(1, reso / 0.5);
+  const up = r * Math.max(0, Math.min(1, octaves));
+  const down = r * Math.max(0, Math.min(1, -octaves));
+  return {
+    hz: Math.min(MAX_FILTER_HZ, 379 * 2 ** (octaves * 2.65) * lerpTable(PCF_HZ_SHIFT, reso)),
+    q: lerpTable(PCF_Q, reso, true) * Math.exp(0.82 * up - 0.5 * down),
+    lpGainDb: lerpTable(PCF_LP_DB, reso) - 2.4 * up + 4 * down,
+    bpGainDb: lerpTable(PCF_BP_DB, reso) + 4.7 * up - 1.4 * down,
+  };
+}
+
 // The compressor's input level -> the export's dB (master 100) the curve was fitted
-// on. Fitted too (the gain stages after the master bus only explain -10 dB of it);
-// a channel runs 3 dB hotter (before the pan) and ReBirth's channel compressor
-// measured another 4 dB less sensitive.
-const COMP_OFFSET_DB = { master: -3.67, channel: -3.67 - 3 - 4 };
+// on. Fitted against the export: 3.3 dB above what the gain after the master bus
+// (-10 dB) predicts. ReBirth's channel compressor measured 7 dB less sensitive.
+const COMP_OFFSET_DB = { master: -6.64, channel: -6.64 - 7 };
+const COMP_HISTORY = 96; // gain-reduction samples (~3 s) for the panel
+const COMP_TRAIL = 10;
 
 export class AudioEngine {
   constructor(state) {
@@ -326,7 +362,7 @@ export class AudioEngine {
     const curve = compCurve(g('fx.comp.threshold'), g('fx.comp.amount'));
     const lowpass = state.on01('fx.pcf.mode');
     const type = PCF_TYPES[lowpass ? 1 : 0];
-    const reso = g('fx.pcf.reso');
+    const pcf = pcfShape(g('fx.pcf.freq'), g('fx.pcf.reso'));
     for (const chain of chains) {
       // Shaper inputs clamp at +-1, so the drive gains scale to the clip levels.
       const dist = chain.stages.dist.fx;
@@ -345,11 +381,9 @@ export class AudioEngine {
       }
       const filter = chain.stages.pcf.fx.filter;
       if (filter.type !== type) filter.type = type;
-      // Q is in dB for lowpass, linear for bandpass. The bandpass is fairly
-      // broad: measured against ReBirth, resonance ~0.8 gives Q ~1.4.
-      set(filter.Q, lowpass ? reso * 18 : 0.6 + reso);
-      // A bandpass drops everything off-centre; ReBirth's keeps roughly the same loudness.
-      set(chain.stages.pcf.fx.makeup.gain, lowpass ? 1 : 2.2);
+      set(filter.frequency, pcf.hz);
+      set(filter.Q, lowpass ? 20 * Math.log10(pcf.q) : pcf.q); // Q is in dB for lowpass
+      set(chain.stages.pcf.fx.makeup.gain, 10 ** ((lowpass ? pcf.lpGainDb : pcf.bpGainDb) / 20));
     }
   }
 
@@ -409,14 +443,14 @@ export class AudioEngine {
     const target = CHANNELS[state.choice('fx.pcf.target', PCF_TARGETS.length) - 1][0];
     const wave = PCF_WAVES[state.choice('fx.pcf.wave', PCF_WAVE_COUNT)];
     const value = wave[positions[target] ?? 0];
-    // Frequency 42/127 measured at ~145 Hz centre in ReBirth renders.
-    const base = Math.min(MAX_FILTER_HZ, 30 * 2 ** (state.get('fx.pcf.freq') * 7));
-    const peak = Math.min(MAX_FILTER_HZ, base * 2 ** (value * state.get('fx.pcf.amount') * 4));
-    const decay = stepDur * (0.2 + state.get('fx.pcf.decay') * 4);
-    const f = chain.stages.pcf.fx.filter.frequency;
-    f.cancelScheduledValues(time);
-    f.setValueAtTime(peak, time);
-    f.setTargetAtTime(base, time + 0.002, decay / 3);
+    // Measured in a ReBirth export: a step with a value sets the envelope to
+    // amount x value (up to 9.5 octaves above the frequency knob), and it falls
+    // back exponentially in octaves; a zero step lets it keep falling.
+    if (!value) return;
+    const detune = chain.stages.pcf.fx.filter.detune;
+    detune.cancelScheduledValues(time);
+    detune.setValueAtTime(1200 * PCF_ENV_OCTAVES * value * state.get('fx.pcf.amount'), time);
+    detune.setTargetAtTime(0, time, pcfDecay(state.get('fx.pcf.decay')));
   }
 
   stop() {
@@ -481,10 +515,29 @@ export class AudioEngine {
     for (const chain of distChains) dist = Math.max(dist, read(chain.distMeter, 0));
     this.fxLevels.dist = Math.max(dist, this.fxLevels.dist - 0.025);
     fx.dist = this.fxLevels.dist;
+    // Compressor: detected level and gain (export dB, as the curve), and ~30 times
+    // a second a sample for the panel's moving trace and the dot's trail.
     const comp = this.compChain();
-    fx.compReduction = comp ? comp.stages.comp.fx.reduction : 0;
+    const meter = comp?.stages.comp.fx.meter;
+    const heard = meter && meter.level > -80;
+    fx.compReduction = meter ? Math.min(0, meter.gain - meter.makeup) : 0;
+    fx.compLevel = heard ? Math.round(meter.level * 4) / 4 : null;
+    fx.compGain = meter ? Math.round(meter.gain * 4) / 4 : 0;
+    const now = performance.now();
+    this.compViz ??= { at: 0, history: new Array(COMP_HISTORY).fill(0), trail: [] };
+    const viz = this.compViz;
+    if (now - viz.at > 33) {
+      viz.at = now;
+      viz.history.push(Math.round(-fx.compReduction * 2) / 2);
+      viz.history.shift();
+      viz.trail.push(heard ? [fx.compLevel, fx.compGain] : null);
+      if (viz.trail.length > COMP_TRAIL) viz.trail.shift();
+    }
+    fx.compHistory = viz.history;
+    fx.compTrail = viz.trail.every((p) => p === null) ? [] : viz.trail;
     const pcf = this.pcfChain();
-    fx.pcfHz = pcf ? pcf.stages.pcf.fx.filter.frequency.value : null;
+    const filter = pcf?.stages.pcf.fx.filter;
+    fx.pcfHz = filter ? Math.min(MAX_FILTER_HZ, filter.frequency.value * 2 ** (filter.detune.value / 1200)) : null;
     // Round so idle meters don't trigger redraws every frame.
     fx.compReduction = Math.round(fx.compReduction * 2) / 2;
     if (fx.pcfHz !== null) fx.pcfHz = Math.round(fx.pcfHz);

@@ -61,11 +61,11 @@ function registerCompressor() {
       }
       this.ms = ms;
       this.g = g;
-      // Gain reduction for the panel's meter, ~40 times a second.
+      // For the panel, ~40 times a second: detected level (export dB) and gain (dB).
       this.sinceReport += n;
       if (this.sinceReport >= 1024) {
         this.sinceReport = 0;
-        this.port.postMessage(g - makeup);
+        this.port.postMessage({ level: 10 * Math.log10(ms + 1e-20) + offset, gain: g, makeup });
       }
       return true;
     }
