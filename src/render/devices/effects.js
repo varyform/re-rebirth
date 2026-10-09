@@ -157,7 +157,8 @@ export class EffectsColumn {
     const echo = this.fxMeters().delay ?? 0;
     const ex = 100 * this.k;
     this.ledRow(ctx, ex, m.h - 16, m.w - 14 - ex, 12, Math.round(echo * 12), { color: C.delay });
-    text(ctx, 'ECHO', ex - 4, m.h - 13.5, { size: 5.5, align: 'right', color: C.inkMuted, spacing: 0.6 });
+    // The label needs room beside the step-mode button (x 14..66).
+    if (ex - 26 > 70) text(ctx, 'ECHO', ex - 4, m.h - 13.5, { size: 5.5, align: 'right', color: C.inkMuted, spacing: 0.6 });
     const steps = String(state.choice('fx.delay.steps', DELAY_STEPS) + 1);
     lcd(ctx, 14, 24, 52, 36);
     sevenSeg(ctx, steps, 14 + (52 - sevenSegWidth(steps, 12)) / 2, 30, 12, 24);
