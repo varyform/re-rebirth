@@ -20,7 +20,7 @@
   - Delay: echoes now land on ReBirth's timing. Steps count sixteenths, and the triplet mode counts eighth-note triplets, so the classic 3-step delay is a dotted eighth again. Feedback halves each repeat at 64 and repeats forever at full, echoes keep their tone, and the send is gentler.
   - Distortion: shape 0 is ReBirth's 1.5-mode hard clipper; higher shapes fold the wave over more and more. Amount drives harder, up to +24 dB, without evening out the level.
   - Compressor: threshold works the right way round (turning it down compresses more, as on ReBirth), with ReBirth's ratio, knee and makeup gain. It's our own compressor now: like ReBirth's it follows the average level rather than peaks, with ReBirth's attack and release, so drum-heavy mixes are no longer squashed and transients survive.
-  - Pattern filter: ReBirth's frequency range (about 10 Hz to 14 kHz) and resonance, with the lowpass getting quieter and the bandpass louder as resonance rises. Each step of the wave throws the filter up to 9.5 octaves (at full amount) and it falls back at the decay knob's rate, from a blip to a hold at full decay.
+  - Pattern filter: ReBirth's frequency range (about 10 Hz to 14 kHz) and resonance, with the lowpass getting quieter and the bandpass louder as resonance rises. The 56 waves are now ReBirth's, measured one by one: every half step either throws the filter up (as far as 9.5 octaves at full amount) or lets it keep falling at the decay knob's rate, from a blip to a hold at full decay. The wave display shows those half steps.
   - Channel faders follow ReBirth's curve: even steps in dB, so lower settings are much quieter than before.
 
 ### Fixed

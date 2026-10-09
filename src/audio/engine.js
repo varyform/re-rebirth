@@ -12,7 +12,7 @@ import { BassVoice } from './bass-voice.js';
 import { KITS, playHit } from './drums.js';
 import { loadCompressor } from './compressor.js';
 import { createDelay, DIST, distDrive, foldCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
-import { PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
+import { PCF_SLOTS, PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent', 'volume', 'waveform'];
 export const DELAY_STEPS = 32;
@@ -442,15 +442,20 @@ export class AudioEngine {
     if (!chain) return;
     const target = CHANNELS[state.choice('fx.pcf.target', PCF_TARGETS.length) - 1][0];
     const wave = PCF_WAVES[state.choice('fx.pcf.wave', PCF_WAVE_COUNT)];
-    const value = wave[positions[target] ?? 0];
-    // Measured in a ReBirth export: a step with a value sets the envelope to
-    // amount x value (up to 9.5 octaves above the frequency knob), and it falls
-    // back exponentially in octaves; a zero step lets it keep falling.
-    if (!value) return;
+    const step = (positions[target] ?? 0) % (PCF_SLOTS / 2);
+    // Measured in a ReBirth export: each half step either sets the envelope to
+    // amount x value (up to 9.5 octaves above the frequency knob) or lets it keep
+    // falling, exponentially in octaves at the decay knob's rate.
     const detune = chain.stages.pcf.fx.filter.detune;
-    detune.cancelScheduledValues(time);
-    detune.setValueAtTime(1200 * PCF_ENV_OCTAVES * value * state.get('fx.pcf.amount'), time);
-    detune.setTargetAtTime(0, time, pcfDecay(state.get('fx.pcf.decay')));
+    const tau = pcfDecay(state.get('fx.pcf.decay'));
+    [0, 1].forEach((half) => {
+      const value = wave[step * 2 + half];
+      if (value === null) return;
+      const t = time + (half * stepDur) / 2;
+      detune.cancelScheduledValues(t);
+      detune.setValueAtTime(1200 * PCF_ENV_OCTAVES * value * state.get('fx.pcf.amount'), t);
+      detune.setTargetAtTime(0, t, tau);
+    });
   }
 
   stop() {

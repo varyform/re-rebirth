@@ -1,5 +1,5 @@
 import { COMP_KNEE_DB, compCurve, DELAY_STEPS } from '../../audio/engine.js';
-import { PCF_WAVE_COUNT, PCF_WAVES } from '../../audio/pcf-waves.js';
+import { PCF_SLOTS, PCF_WAVE_COUNT, PCF_WAVE_SHAPES, PCF_WAVES } from '../../audio/pcf-waves.js';
 import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../../channels.js';
 import { hits } from '../../ui/hits.js';
 import { click, knobDrag, toggle } from '../../ui/handlers.js';
@@ -341,7 +341,8 @@ export class EffectsColumn {
     const wave = state.choice('fx.pcf.wave', PCF_WAVE_COUNT);
     lcd(ctx, x, y, w, h, C.lcdGreen);
     text(ctx, `WAVE ${String(wave + 1).padStart(2, '0')}`, x + 5, y + 7, { size: 5.5, family: MONO, align: 'left', color: C.lcdGreenOn });
-    const bw = (w - 10) / 16;
+    // Two slots per step; slots that let the envelope fall are drawn falling.
+    const bw = (w - 10) / PCF_SLOTS;
     const top = y + 14;
     const maxH = h - 18;
     // While playing: the step the filter is on, and its live cutoff (log scale).
@@ -349,14 +350,15 @@ export class EffectsColumn {
     const target = state.choice('fx.pcf.target', n);
     const t = state.transport;
     const active = t.playing && state.on01('fx.pcf.on') && target > 0;
-    const step = active ? (t.positions[CHANNELS[target - 1][0]] ?? -1) : -1;
-    PCF_WAVES[wave].forEach((v, i) => {
+    const step = active ? (t.positions[CHANNELS[target - 1][0]] ?? -1) % (PCF_SLOTS / 2) : -1;
+    PCF_WAVE_SHAPES[wave].forEach((v, i) => {
       const bx = x + 5 + i * bw;
       ctx.fillStyle = C.lcdGreenDim;
-      ctx.fillRect(bx + 0.8, top, bw - 1.6, maxH);
-      ctx.fillStyle = i === step ? C.lcdGreenOn : C.lcdGreenMid;
+      ctx.fillRect(bx + 0.4, top, bw - 0.8, maxH);
+      const set = PCF_WAVES[wave][i] !== null;
+      ctx.fillStyle = Math.floor(i / 2) === step ? C.lcdGreenOn : set ? C.lcdGreenMid : rgba(C.lcdGreenMid, 0.55);
       const bh = Math.max(1, v * maxH);
-      ctx.fillRect(bx + 0.8, top + maxH - bh, bw - 1.6, bh);
+      ctx.fillRect(bx + 0.4, top + maxH - bh, bw - 0.8, bh);
     });
     const hz = this.fxMeters().pcfHz;
     if (active && hz) {
