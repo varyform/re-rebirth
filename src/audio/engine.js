@@ -117,6 +117,10 @@ export class AudioEngine {
       const mute = ctx.createGain();
       const send = ctx.createGain();
       input.gain.value = INPUT_GAIN[id];
+      // Channels run in stereo from the input on: every voice level and the pan law
+      // were fitted that way (a mono input through the panner loses 3 dB).
+      input.channelCount = 2;
+      input.channelCountMode = 'explicit';
       post.gain.value = 10 ** (CHANNEL_TRIM_DB[id] / 20);
       const inserts = new InsertChain(ctx, input, post);
       post.connect(pan).connect(fader).connect(mute).connect(this.masterBus);
