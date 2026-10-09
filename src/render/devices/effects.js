@@ -91,9 +91,9 @@ export class EffectsColumn {
       ctx.translate(0, m.y);
       this.drawFrame(ctx, m);
       if (m.key === 'mixer') this.drawMixer(ctx, m);
-      if (m.key === 'delay') this.drawDelay(ctx);
+      if (m.key === 'delay') this.drawDelay(ctx, m);
       if (m.key === 'dist') this.drawDist(ctx, m);
-      if (m.key === 'comp') this.drawCompTarget(ctx, 160, 36, m.w - 174);
+      if (m.key === 'comp') this.drawComp(ctx, m);
       if (m.key === 'pcf') this.drawPcf(ctx, m);
       for (const k of m.knobs) k.draw(ctx, state);
       ctx.restore();
@@ -182,8 +182,25 @@ export class EffectsColumn {
     }
   }
 
-  drawDelay(ctx) {
+  // Horizontal LED strip; `lit` LEDs from the left. Colors: green, then yellow, red at the end.
+  ledRow(ctx, x, y, w, count, lit, { yellowFrom = count - 3, redFrom = count - 1, color = null } = {}) {
+    const pitch = w / count;
+    for (let i = 0; i < count; i++) {
+      const c = color ?? (i >= redFrom ? C.ledRed : i >= yellowFrom ? C.ledYellow : C.ledGreen);
+      ledBar(ctx, x + i * pitch, y, pitch - 2, 5, i < lit, c);
+    }
+  }
+
+  fxMeters() {
+    return this.state.meters.fx ?? {};
+  }
+
+  drawDelay(ctx, m) {
     const { state } = this;
+    // Echo output level, so feedback tails are visible.
+    const echo = this.fxMeters().delay ?? 0;
+    this.ledRow(ctx, 100, m.h - 16, m.w - 114, 12, Math.round(echo * 12), { color: C.delay });
+    text(ctx, 'ECHO', 96, m.h - 13.5, { size: 5.5, align: 'right', color: C.inkMuted, spacing: 0.6 });
     const steps = String(state.choice('fx.delay.steps', DELAY_STEPS) + 1);
     lcd(ctx, 14, 24, 52, 36);
     sevenSeg(ctx, steps, 14 + (52 - sevenSegWidth(steps, 12)) / 2, 30, 12, 24);
@@ -194,34 +211,35 @@ export class EffectsColumn {
     hits.rect(ctx, 14, 70, 52, 14, toggle(state, 'fx.delay.triplet'));
   }
 
-  // Distortion is switched per channel (D buttons in the mixer); show which.
+  // Distortion is switched per channel (D buttons in the mixer): show which, and
+  // the level coming out of the distortion.
   drawDist(ctx, m) {
     const x = 160;
     const w = m.w - x - 14;
-    lcd(ctx, x, 36, w, 18, C.lcdGreen);
-    const on = CHANNELS.filter(([id]) => this.state.on01(`mixer.${id}.dist`)).map(([, label]) => label.replace(/\D+/g, (s) => s[0]));
-    text(ctx, on.length ? on.join(' ') : 'NONE', x + w / 2, 45.5, { size: 7, family: MONO, color: C.lcdGreenOn });
-    text(ctx, 'MIXER D SWITCHES', x + w / 2, 66, { size: 5.5, color: C.inkMuted, spacing: 0.6 });
+    lcd(ctx, x, 26, w, 18, C.lcdGreen);
+    const on = this.state.on01('fx.dist.on') ? CHANNELS.filter(([id]) => this.state.on01(`mixer.${id}.dist`)).map(([, label]) => label.replace(/\D+/g, (s) => s[0])) : [];
+    text(ctx, on.length ? on.join(' ') : 'NONE', x + w / 2, 35.5, { size: 7, family: MONO, color: C.lcdGreenOn });
+    text(ctx, 'ON CHANNELS (MIXER D)', x + w / 2, 51, { size: 5, color: C.inkMuted, spacing: 0.5 });
+    const level = this.fxMeters().dist ?? 0;
+    this.ledRow(ctx, x, 60, w, 10, Math.round(level * 10), { yellowFrom: 7, redFrom: 9 });
+    text(ctx, 'OUTPUT', x + w / 2, 74, { size: 5.5, color: C.inkMuted, spacing: 0.6 });
   }
 
-  // Compressor routing cycles MASTER → channels → OFF. OFF is a separate param so
-  // the target's stored value keeps its meaning in saved sessions.
-  drawCompTarget(ctx, x, y, w) {
+  // Gain-reduction meter (2 dB per LED) plus where the compressor sits. Routing
+  // is set with the mixer's C buttons; none lit = master.
+  drawComp(ctx, m) {
     const { state } = this;
-    const n = COMP_TARGETS.length;
+    const x = 160;
+    const w = m.w - x - 14;
     const routed = state.on01('fx.comp.routed');
-    const i = state.choice('fx.comp.target', n);
-    lcd(ctx, x, y, w, 18, C.lcdGreen);
-    text(ctx, `\u25B8 ${routed ? COMP_TARGETS[i] : 'OFF'}`, x + w / 2, y + 9.5, { size: 7.5, family: MONO, color: C.lcdGreenOn });
-    text(ctx, 'TARGET', x + w / 2, y + 30, { size: 5.5, color: C.inkMuted, spacing: 0.8 });
-    const next = () => {
-      if (!routed) {
-        state.set('fx.comp.routed', 1);
-        state.setChoice('fx.comp.target', 0, n);
-      } else if (i === n - 1) state.set('fx.comp.routed', 0);
-      else state.setChoice('fx.comp.target', i + 1, n);
-    };
-    hits.rect(ctx, x, y, w, 18, click(next));
+    const where = !state.on01('fx.comp.on') || !routed ? 'OFF' : COMP_TARGETS[state.choice('fx.comp.target', COMP_TARGETS.length)];
+    lcd(ctx, x, 26, w, 18, C.lcdGreen);
+    text(ctx, `ON ${where}`, x + w / 2, 35.5, { size: 7, family: MONO, color: C.lcdGreenOn });
+    const reduction = -(this.fxMeters().compReduction ?? 0);
+    const count = 12;
+    this.ledRow(ctx, x, 54, w, count, Math.min(count, Math.round(reduction / 2)), { yellowFrom: 6, redFrom: 9 });
+    [['0', 0], ['6', 3], ['12', 6], ['24', 12]].forEach(([label, i]) => text(ctx, label, x + (i * w) / count - (i === count ? 3 : 0), 64, { size: 5, color: C.inkMuted }));
+    text(ctx, `GAIN REDUCTION ${reduction.toFixed(1)} dB`, x + w / 2, 74, { size: 5.5, color: C.inkMuted, spacing: 0.4 });
   }
 
   // Click the readout to cycle a routing choice.
@@ -246,14 +264,28 @@ export class EffectsColumn {
     const bw = (w - 10) / 16;
     const top = y + 14;
     const maxH = h - 18;
+    // While playing: the step the filter is on, and its live cutoff (log scale).
+    const n = PCF_TARGETS.length;
+    const target = state.choice('fx.pcf.target', n);
+    const t = state.transport;
+    const active = t.playing && state.on01('fx.pcf.on') && target > 0;
+    const step = active ? (t.positions[CHANNELS[target - 1][0]] ?? -1) : -1;
     PCF_WAVES[wave].forEach((v, i) => {
       const bx = x + 5 + i * bw;
       ctx.fillStyle = C.lcdGreenDim;
       ctx.fillRect(bx + 0.8, top, bw - 1.6, maxH);
-      ctx.fillStyle = C.lcdGreenOn;
+      ctx.fillStyle = i === step ? C.lcdGreenOn : C.lcdGreenMid;
       const bh = Math.max(1, v * maxH);
       ctx.fillRect(bx + 0.8, top + maxH - bh, bw - 1.6, bh);
     });
+    const hz = this.fxMeters().pcfHz;
+    if (active && hz) {
+      const pos = Math.min(1, Math.max(0, Math.log2(hz / 30) / Math.log2(14000 / 30)));
+      const ly = top + maxH - pos * maxH;
+      ctx.fillStyle = C.ledYellow;
+      ctx.fillRect(x + 4, ly - 0.5, w - 8, 1);
+      text(ctx, hz >= 1000 ? `${(hz / 1000).toFixed(1)}k` : `${Math.round(hz)}`, x + w - 5, y + 7, { size: 5.5, family: MONO, align: 'right', color: C.ledYellow });
+    }
     hits.rect(ctx, x, y, w, h, knobDrag(state, 'fx.pcf.wave'));
 
     // Wave ◂▸, mode, target

@@ -25,6 +25,14 @@ const STEP_ACCENT = 1.55;
 // ReBirth's accented kick is ~8 dB louder (KiloMix); the 808's matched at 40/127.
 const AC_DEPTH = { r808: 0.8, r909: 6 };
 
+// Fixed per-channel gains, applied outside the song's automation (which only moves
+// knobs and faders), so changing them never breaks a song.
+//  INPUT_GAIN: before the channel's effects; part of the voice calibration, and it
+//    changes how hard distortion / compressor are driven.
+//  CHANNEL_TRIM_DB: after the effects, before pan and fader; a plain volume offset.
+const INPUT_GAIN = { bass1: 1, bass2: 1, r808: 0.55, r909: 0.55 };
+export const CHANNEL_TRIM_DB = { bass1: 0, bass2: 0, r808: 0, r909: 0 };
+
 // Unity at the top: song files usually run channel faders near full.
 const faderGain = (v) => v * v;
 
@@ -77,20 +85,32 @@ export class AudioEngine {
       const mute = ctx.createGain();
       const send = ctx.createGain();
       const meter = this.analyser();
+      input.gain.value = INPUT_GAIN[id];
+      post.gain.value = 10 ** (CHANNEL_TRIM_DB[id] / 20);
       const inserts = new InsertChain(ctx, input, post);
       post.connect(pan).connect(fader).connect(mute).connect(this.masterBus);
       mute.connect(meter);
       mute.connect(send).connect(this.delay.in);
       this.channels[id] = { label, input, inserts, pan, fader, mute, send, meter, level: 0 };
     }
-    this.channels.r808.input.gain.value = 0.55;
-    this.channels.r909.input.gain.value = 0.55;
+    // Effect activity meters: delay echoes, and each chain's distortion output.
+    this.delayMeter = this.analyser();
+    this.delay.out.connect(this.delayMeter);
+    for (const chain of this.chains()) {
+      chain.distMeter = this.analyser();
+      chain.stages.dist.wet.connect(chain.distMeter);
+    }
+    this.fxLevels = { delay: 0, dist: 0 };
 
     this.bass = Object.fromEntries(BASS_IDS.map((id) => [id, new BassVoice(ctx, this.channels[id].input)]));
     this.kits = Object.fromEntries(DRUM_IDS.map((id) => [id, {}]));
     this.meterBuf = new Float32Array(512);
     this.masterLevel = 0;
     this.sync();
+  }
+
+  chains() {
+    return [...Object.values(this.channels).map((c) => c.inserts), this.masterInserts];
   }
 
   analyser() {
@@ -323,6 +343,29 @@ export class AudioEngine {
     }
     this.masterLevel = read(this.masterMeter, this.masterLevel);
     this.state.meters.master = this.masterLevel;
-    return changed;
+    return this.updateFxMeters(read) || changed;
+  }
+
+  // Effect activity for the panels: compressor gain reduction (dB), delay echo and
+  // distortion output levels (0..1), and the pattern filter's live cutoff.
+  updateFxMeters(read) {
+    const { state } = this;
+    const fx = (state.meters.fx ??= {});
+    const before = JSON.stringify(fx);
+    this.fxLevels.delay = read(this.delayMeter, this.fxLevels.delay);
+    fx.delay = this.fxLevels.delay;
+    const distChains = state.on01('fx.dist.on') ? CHANNELS.filter(([id]) => state.on01(`mixer.${id}.dist`)).map(([id]) => this.channels[id].inserts) : [];
+    let dist = 0;
+    for (const chain of distChains) dist = Math.max(dist, read(chain.distMeter, 0));
+    this.fxLevels.dist = Math.max(dist, this.fxLevels.dist - 0.025);
+    fx.dist = this.fxLevels.dist;
+    const comp = this.compChain();
+    fx.compReduction = comp ? comp.stages.comp.fx.comp.reduction : 0;
+    const pcf = this.pcfChain();
+    fx.pcfHz = pcf ? pcf.stages.pcf.fx.filter.frequency.value : null;
+    // Round so idle meters don't trigger redraws every frame.
+    fx.compReduction = Math.round(fx.compReduction * 2) / 2;
+    if (fx.pcfHz !== null) fx.pcfHz = Math.round(fx.pcfHz);
+    return JSON.stringify(fx) !== before;
   }
 }
