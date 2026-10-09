@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Offline render of a song to WAV with the real engine, in headless Chrome.
 //
-//   node tools/render.mjs <song.rbs|session.json> [out.wav] [--start 1] [--bars 16] [--rate 48000] [--solo bass1] [--set fx.dist.on=0 ...]
+//   node tools/render.mjs <song.rbs|session.json> [out.wav] [--start 1] [--bars 16] [--rate 48000] [--solo bass1] [--set fx.dist.on=0 ...] [--no-trim]
 //
 // Uses the locally installed Chrome (override with CHROME=/path/to/chrome).
 import { writeFileSync } from 'node:fs';
@@ -12,12 +12,13 @@ import { createServer } from 'vite';
 const CHROME = process.env.CHROME ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
 
 function parseArgs(argv) {
-  const opts = { start: 1, bars: 16, rate: 48000, solo: null, set: {}, files: [] };
+  const opts = { start: 1, bars: 16, rate: 48000, solo: null, set: {}, noTrim: false, files: [] };
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a === '--start') opts.start = Number(argv[++i]);
     else if (a === '--bars') opts.bars = Number(argv[++i]);
     else if (a === '--rate') opts.rate = Number(argv[++i]);
+    else if (a === '--no-trim') opts.noTrim = true;
     else if (a === '--solo') opts.solo = argv[++i];
     else if (a === '--set') {
       const [key, value] = argv[++i].split('=');
@@ -64,7 +65,7 @@ try {
   await page.waitForFunction(() => window.renderReady);
   const url = `/${relative(root, resolve(song)).split('/').map(encodeURIComponent).join('/')}`;
   const t0 = performance.now();
-  const res = await page.evaluate((args) => window.renderSong(args), { url, startBar: opts.start, bars: opts.bars, sampleRate: opts.rate, solo: opts.solo, set: opts.set });
+  const res = await page.evaluate((args) => window.renderSong(args), { url, startBar: opts.start, bars: opts.bars, sampleRate: opts.rate, solo: opts.solo, set: opts.set, noTrim: opts.noTrim });
   writeFileSync(out, wav(Buffer.from(res.data, 'base64'), res.sampleRate, res.channels));
   console.log(`${out}: bars ${opts.start}-${opts.start + opts.bars - 1} at ${res.tempo} BPM${opts.solo ? `, solo ${opts.solo}` : ''} (${((performance.now() - t0) / 1000).toFixed(1)}s)`);
 } finally {

@@ -9,7 +9,7 @@
 <body>
   <!-- Driven by tools/render.mjs: renders a song offline with the real engine. -->
   <script type="module">
-    import {AudioEngine} from '/src/audio/engine.js';
+    import {AudioEngine, CHANNEL_TRIM_DB} from '/src/audio/engine.js';
     import {Rack} from '/src/render/rack.js';
     import {Clock} from '/src/sequencer/clock.js';
     import {isRbs, parseRbs} from '/src/song/rbs.js';
@@ -18,7 +18,9 @@
 
     // Returns interleaved 16-bit PCM as base64 (keeps the page→node transfer small).
     // `set`: { paramKey: value } pinned for the whole render (its automation is dropped).
-    window.renderSong = async ({url, startBar = 1, bars = 16, sampleRate = 48000, solo = null, set = {}, tail = 1}) => {
+    // `noTrim`: ignore CHANNEL_TRIM_DB (calibrate voices against references, not the mix taste).
+    window.renderSong = async ({url, startBar = 1, bars = 16, sampleRate = 48000, solo = null, set = {}, noTrim = false, tail = 1}) => {
+      if (noTrim) for (const id of Object.keys(CHANNEL_TRIM_DB)) CHANNEL_TRIM_DB[id] = 0;
       const buffer = await (await fetch(url)).arrayBuffer();
       const session = isRbs(buffer) ? parseRbs(buffer) : JSON.parse(new TextDecoder().decode(buffer));
       const state = new State();

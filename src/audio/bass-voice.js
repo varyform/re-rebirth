@@ -20,10 +20,12 @@ function tuneCents(knob) {
 }
 const GATE = 0.55; // fraction of a step the gate stays open
 const GLIDE = 0.035; // slide time constant, seconds
-const MAX_CUTOFF = 14000; // keep cutoff + envelope sweep safely below Nyquist
+// Filter range fitted to ReBirth's per-channel bass exports of a whole song:
+// the knob spans ~300 Hz to ~6.8 kHz, and the envelope never opens it past 4 kHz.
+const MAX_CUTOFF = 4000;
 const CUTOFF_MIN = 300;
-const CUTOFF_OCTAVES = 5.5;
-const ENV_DEPTH = 4200; // cents of filter sweep at full env mod
+const CUTOFF_OCTAVES = 4.5;
+const ENV_DEPTH = 2400; // cents of filter sweep at full env mod
 
 const midiToHz = (m) => 440 * 2 ** ((m - 69) / 12);
 
@@ -50,12 +52,11 @@ export class BassVoice {
     this.vca = ctx.createGain();
     this.vca.gain.value = 0;
     this.level = ctx.createGain();
-    // Like the hardware's output coupling, the low end is thinned out. Fitted to a
-    // ReBirth recording: bass-only sections match below 60 Hz, and the kick keeps
-    // its room in the full mix.
+    // Like the hardware's output coupling, the low end is thinned out. Fitted to
+    // ReBirth's per-channel bass exports (40-90 Hz band vs 90-180 Hz).
     const lowCut = ctx.createBiquadFilter();
     lowCut.type = 'highpass';
-    lowCut.frequency.value = 100;
+    lowCut.frequency.value = 60;
     lowCut.Q.value = 0.6;
     this.osc.connect(this.f1).connect(this.f2).connect(this.vca).connect(this.level).connect(lowCut).connect(out);
     this.osc.start();
@@ -73,8 +74,9 @@ export class BassVoice {
     set(this.f2.Q, -3 + p.resonance * 22);
     set(this.osc.detune, tuneCents(p.tuning));
     // Resonance peaks add a lot of energy; trim so the knob doesn't double as volume.
-    // Overall level calibrated against ReBirth renders (bass sits ~10 dB above v1).
-    set(this.level.gain, (p.volume * p.volume * 2.2) / (1 + p.resonance * 1.5));
+    // Overall level fitted to ReBirth's per-channel bass exports: dry sections
+    // fit best at 0.8, distorted ones louder; 1.0 splits the difference.
+    set(this.level.gain, (p.volume * p.volume * 1.0) / (1 + p.resonance * 1.5));
     const type = p.waveform >= 0.5 ? 'square' : 'sawtooth';
     if (this.osc.type !== type) this.osc.type = type;
   }
