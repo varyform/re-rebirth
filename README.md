@@ -1,6 +1,6 @@
 # Re-Rebirth
 
-A tribute to [ReBirth RB-338](https://en.wikipedia.org/wiki/ReBirth_RB-338) in the browser: two acid bass lines, two drum machines, a mixer with effects, and a pattern/song sequencer. It opens original ReBirth 2.0 songs (`.rbs`) and plays them back.
+A tribute to [ReBirth RB-338](https://en.wikipedia.org/wiki/ReBirth_RB-338) in the browser: two acid bass lines, two drum machines, a mixer with effects and VU meters, and a pattern/song sequencer. It opens original ReBirth 2.0 songs (`.rbs`) and plays them back.
 
 Everything is drawn on a canvas and every sound is synthesized live with the Web Audio API: no samples.
 
@@ -14,7 +14,8 @@ Everything is drawn on a canvas and every sound is synthesized live with the Web
 - **Drum 08:** analog-style rhythm machine. The LT/LC, MT/MC, HT/HC, RS/CL and CP/MA switches select congas, claves and maracas.
 - **Drum 09:** hybrid rhythm machine with per-step accent and flam.
 - **ALL LANES grid** on both drum machines: see and paint every instrument of a pattern at once.
-- **Mixer:** level, pan, delay send, mute/solo and distortion / pattern filter / compressor routing per channel, with meters.
+- **Channel strips** beside each instrument: on switch, pan, delay send, level fader with left/right meters, and distortion / pattern filter / compressor routing.
+- **Master:** fader with left/right meters, delay return, compressor on the master, and analogue VU needles; click them for a spectrum display.
 - **Effects:** tempo-synced delay, distortion, compressor and a pattern-controlled filter.
 - **Sequencer:** 32 patterns per device (banks A–D), length and shuffle per pattern, copy/paste/clear/random.
 - **Song mode:** play a song's arrangement and automation, loop a range, or arm REC and record pattern changes and knob moves.
@@ -62,7 +63,7 @@ The app is plain JavaScript with no framework, built with Vite:
 | `src/sequencer/` | Lookahead clock and pattern scheduling |
 | `src/song/` | Song model, playback/recording, `.rbs` reader, `.json` sessions |
 | `src/ui/` | Pointer handling and hit regions |
-| `tools/` | Offline rendering and analysis scripts used for calibration; `icons.mjs` renders the home-screen PNGs from `public/icon.svg` |
+| `tools/` | Offline rendering and analysis scripts used for calibration; `icons.mjs` renders the home-screen PNGs from `public/icon.svg`; `screenshot.mjs` takes this README's screenshot |
 
 ### Calibration tools
 

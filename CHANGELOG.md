@@ -1,9 +1,18 @@
 # Changelog
 
-## Unreleased
+## 0.3.0 — 2026-10-09
 
 ### New
+- **Channel strips.** Like on ReBirth, every instrument has its own mix strip right next to it: on switch, pan, delay send, a level fader with separate left and right meters, and DIST / PCF / COMP buttons.
+- **Master module.** Master fader with left/right meters, delay return and its own COMP button. The COMP buttons work as one group, so it's always visible where the single compressor sits (click the lit one to switch it off).
+- **VU needles and spectrum.** The master shows two backlit analogue VU meters; click them to switch to a spectrum display and back.
 - **Home screen icon.** "Add to Home Screen" on iPhone and iPad (and installing on Android or desktop Chrome) now gets a proper icon, and the app opens full screen without the browser bars.
+
+### Changed
+- Bass lines are a little more compact; Drum 08 got the room so its stacked knob labels no longer overlap.
+- Effect modules have a brushed grey finish and new places: pattern filter beside Bass Line 2, compressor beside Drum 09.
+- Mute and solo buttons are gone; each channel strip has an on switch instead.
+- Opening a ReBirth 2.0.1 song whose compressor is unassigned no longer puts it on the master.
 
 ## 0.2.0 — 2026-10-09
 
