@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0 — 2026-10-10
 
 ### New
 - **Compressor screen.** The compressor shows its curve, redrawn as you turn AMOUNT and THRESHOLD, with a glowing dot riding it at the music's level, plus the last few seconds of gain reduction scrolling past.
