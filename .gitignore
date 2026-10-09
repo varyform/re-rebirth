@@ -3,3 +3,4 @@ dist
 tracks
 *.wav
 .DS_Store
+tmp
