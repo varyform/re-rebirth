@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.2.0 — 2026-10-09
+
+### New
+- **DRUM 08 voice switches.** LT/LC, MT/MC, HT/HC, RS/CL and CP/MA switch the toms to congas, the rim shot to claves and the clap to maracas, like on ReBirth. Songs that use the alternate voices now play them.
+
+### Sound
+- Both drum machines measured voice by voice against a ReBirth test song that plays every sound alone: DRUM 08 snare (two pure drum heads, tone balances them), real toms next to the congas, cowbell, cymbal and open hat ring out much longer, closed hat brighter. DRUM 09 snare (pitch follows tune, longer tail), kick tune (the sweep always starts high, tune sets its speed), softer kick click, longer toms, cymbals and clap tail.
+- Pan follows ReBirth's law: hard left/right is fully one side, and moderate settings are wider than before.
+
 ## 0.1.0 — 2026-10-09
 
 ### New
