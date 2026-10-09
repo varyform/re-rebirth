@@ -1,0 +1,10 @@
+.git
+.kamal
+node_modules
+dist
+tracks
+tools
+*.wav
+*.WAV
+*.rbs
+.DS_Store

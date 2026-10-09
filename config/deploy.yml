@@ -1,0 +1,27 @@
+service: re-rebirth
+image: re-rebirth
+
+servers:
+  web:
+    - 192.168.4.95
+
+# Kamal runs a registry on this machine and pushes to the server through the
+# SSH tunnel, so no external registry or credentials are needed.
+registry:
+  server: localhost:5555
+
+builder:
+  arch: amd64
+
+proxy:
+  host: rb.ol3h.org
+  app_port: 80
+  healthcheck:
+    path: /up
+  # TLS is expected to terminate in front of this LAN server. To have
+  # kamal-proxy fetch a Let's Encrypt certificate instead, set ssl: true
+  # (needs ports 80/443 on the server reachable from the internet).
+  ssl: false
+
+ssh:
+  user: root
