@@ -1,8 +1,16 @@
-// Reader for ReBirth 2.0 song files (.rbs), written from the published format
-// notes. Produces the same session structure as our JSON saves (session.js).
+// Reader for ReBirth 2.0 song files (.rbs), written from Propellerhead's format
+// description (RBS 4.2, ReBirth 2.0.1; docs/RBS42.txt) and checked against real songs. Produces
+// the same session structure as our JSON saves (session.js).
 //
 // Layout: big-endian IFF. "CAT " RB40 { HEAD, GLOB, USRI, CAT DEVL {...}, CAT TRKL {...} }
 // Track events: MIDI-style varint delta, controller id, value; 1 tick = 1/32 note.
+//
+// Where real files disagree with the description, the files win:
+// - USRI is 712 bytes: text is ZSTRING(401) at 41 and the web page sits at 442.
+// - 909 patterns start at offset 31 (2 + 28 knobs + 1 reserved), not 30.
+// - 2.0.1 mixer track ids for the 909 are 24-27, not 0x18, 0x19, 0x20, 0x21.
+// - 303 step flag 0x10 marks a rest (the description reads it the other way);
+//   checked step by step against ReBirth's audio.
 import { COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { emptyBassPattern, emptyDrumPattern, PATTERN_COUNT, STEPS } from '../state.js';
 import { TICKS_PER_BAR } from './song.js';
@@ -120,9 +128,14 @@ export function parseRbs(buffer, fileName = '') {
     session.info.url = r.zstr(usri.at + 442, 101);
   }
 
+  // HEAD byte 6: 0 for the earliest 2.0 files; 1 and 2 (later 2.0 / 2.0.1) number the
+  // mixer controllers differently. Verified on songs of each kind.
+  const head = find(top, 'HEAD');
+  const version = head ? r.u8(head.at + 6) : 0;
+
   const dev = devl.children;
   const bassChunks = dev.filter((c) => c.id === '303 ');
-  readMixer(r, find(dev, 'MIXR'), P);
+  readMixer(r, find(dev, 'MIXR'), P, version);
   readEffects(r, dev, find, P);
   bassChunks.forEach((c, i) => (session.bass[`bass${i + 1}`] = readBass(r, c, `bass${i + 1}`, P)));
   const r808 = find(dev, '808 ');
@@ -130,10 +143,6 @@ export function parseRbs(buffer, fileName = '') {
   if (r808) session.drums.r808 = readDrums(r, r808, 'r808', R808_KNOBS, R808_TRACKS, P);
   if (r909) session.drums.r909 = readDrums(r, r909, 'r909', R909_KNOBS, R909_TRACKS, P);
 
-  // HEAD byte 6: 0 for the earliest 2.0 files; 1 and 2 (later 2.0 / 2.0.1) number the
-  // mixer controllers differently. Verified on songs of each kind.
-  const head = find(top, 'HEAD');
-  const version = head ? r.u8(head.at + 6) : 0;
   if (trkl) readTracks(r, trkl.children.filter((c) => c.id === 'TRAK'), session.song, version);
   const song = session.song;
   const last = Math.max(0, ...Object.values(song.tracks).flatMap((t) => t.map((e) => e.tick)));
@@ -142,12 +151,13 @@ export function parseRbs(buffer, fileName = '') {
   return session;
 }
 
-function readMixer(r, c, P) {
+function readMixer(r, c, P, version) {
   if (!c) return;
   const o = c.at;
   P['mixer.master.level'] = knob(r.u8(o));
-  // Routing: device ids in the header (0 off, 1 master, 2..5 channels), or
-  // per-channel flags right after the distortion switch.
+  // Routing: device ids in the header (0 off, 1 master, 2..5 channels). The
+  // earliest 2.0 files use per-channel flags right after the distortion switch
+  // instead, with none set meaning the master.
   let comp = r.u8(o + 1);
   let pcf = r.u8(o + 2);
   CHANNEL_IDS.forEach((id, k) => {
@@ -160,6 +170,7 @@ function readMixer(r, c, P) {
     if (r.u8(b + 5)) pcf = k + 2;
     if (r.u8(b + 6)) comp = k + 2;
   });
+  if (version >= 1) P['fx.comp.routed'] = comp >= 1 && comp <= 5 ? 1 : 0;
   P['fx.comp.target'] = choice(Math.min(Math.max(comp - 1, 0), COMP_TARGETS.length - 1), COMP_TARGETS.length);
   P['fx.pcf.target'] = choice(pcf >= 2 ? pcf - 1 : 0, PCF_TARGETS.length);
 }
@@ -315,11 +326,12 @@ function readTracks(r, traks, song, version) {
 function convertMixer201(events) {
   const out = [];
   for (const { tick, id, value } of events) {
-    if (id === 1) {
+    // Device ids outside 0..5 (seen once, value 13) aren't valid routings.
+    if (id === 1 && value <= 5) {
       out.push({ tick, key: 'fx.comp.routed', value: value ? 1 : 0 });
       if (value) out.push({ tick, key: 'fx.comp.target', value: choice(Math.min(value - 1, COMP_TARGETS.length - 1), COMP_TARGETS.length) });
     }
-    if (id === 2) out.push({ tick, key: 'fx.pcf.target', value: choice(value >= 2 ? value - 1 : 0, PCF_TARGETS.length) });
+    if (id === 2 && value <= 5) out.push({ tick, key: 'fx.pcf.target', value: choice(value >= 2 ? value - 1 : 0, PCF_TARGETS.length) });
     if (id < 6 || id >= 30) continue;
     const chId = CHANNEL_IDS[Math.floor((id - 6) / 6)];
     const n = (id - 6) % 6;
