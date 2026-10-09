@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Original mark: a rack knob above four step pads in the Drum 08 step colours. -->
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3d44"/>
+      <stop offset="1" stop-color="#16181c"/>
+    </linearGradient>
+    <radialGradient id="knob" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#f4f5f7"/>
+      <stop offset="1" stop-color="#7d828c"/>
+    </radialGradient>
+  </defs>
+  <rect x="1" y="1" width="62" height="62" rx="12" fill="url(#panel)"/>
+  <rect x="1.5" y="1.5" width="61" height="61" rx="11.5" fill="none" stroke="#ffffff" stroke-opacity="0.18"/>
+  <circle cx="32" cy="25" r="15" fill="#0c0c0d"/>
+  <circle cx="32" cy="25" r="12.5" fill="url(#knob)"/>
+  <line x1="32" y1="25" x2="40.5" y2="16.5" stroke="#ff6a1a" stroke-width="4" stroke-linecap="round"/>
+  <rect x="7" y="46" width="11" height="10" rx="2" fill="#e8371f"/>
+  <rect x="20" y="46" width="11" height="10" rx="2" fill="#f28c1c"/>
+  <rect x="33" y="46" width="11" height="10" rx="2" fill="#f4d03a"/>
+  <rect x="46" y="46" width="11" height="10" rx="2" fill="#efe9d8"/>
+</svg>
