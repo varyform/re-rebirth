@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <!-- Home-screen icon: the favicon mark, full-bleed (the OS rounds or masks the
+       corners) with the artwork inside the central safe zone for round masks.
+       PNGs are rendered from this file by tools/icons.mjs. -->
+  <defs>
+    <linearGradient id="panel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3a3d44"/>
+      <stop offset="1" stop-color="#16181c"/>
+    </linearGradient>
+    <radialGradient id="knob" cx="0.38" cy="0.32" r="0.75">
+      <stop offset="0" stop-color="#f4f5f7"/>
+      <stop offset="1" stop-color="#7d828c"/>
+    </radialGradient>
+  </defs>
+  <rect width="64" height="64" fill="url(#panel)"/>
+  <g transform="translate(32 32) scale(0.74) translate(-32 -33)">
+    <circle cx="32" cy="25" r="15" fill="#0c0c0d"/>
+    <circle cx="32" cy="25" r="12.5" fill="url(#knob)"/>
+    <line x1="32" y1="25" x2="40.5" y2="16.5" stroke="#ff6a1a" stroke-width="4" stroke-linecap="round"/>
+    <rect x="7" y="46" width="11" height="10" rx="2" fill="#e8371f"/>
+    <rect x="20" y="46" width="11" height="10" rx="2" fill="#f28c1c"/>
+    <rect x="33" y="46" width="11" height="10" rx="2" fill="#f4d03a"/>
+    <rect x="46" y="46" width="11" height="10" rx="2" fill="#efe9d8"/>
+  </g>
+</svg>

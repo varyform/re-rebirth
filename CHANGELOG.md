@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Home screen icon.** "Add to Home Screen" on iPhone and iPad (and installing on Android or desktop Chrome) now gets a proper icon, and the app opens full screen without the browser bars.
+
 ## 0.2.0 — 2026-10-09
 
 ### New

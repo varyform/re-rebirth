@@ -62,7 +62,7 @@ The app is plain JavaScript with no framework, built with Vite:
 | `src/sequencer/` | Lookahead clock and pattern scheduling |
 | `src/song/` | Song model, playback/recording, `.rbs` reader, `.json` sessions |
 | `src/ui/` | Pointer handling and hit regions |
-| `tools/` | Offline rendering and analysis scripts used for calibration |
+| `tools/` | Offline rendering and analysis scripts used for calibration; `icons.mjs` renders the home-screen PNGs from `public/icon.svg` |
 
 ### Calibration tools
 
