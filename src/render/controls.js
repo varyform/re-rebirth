@@ -82,7 +82,7 @@ const TOOL = { size: 5.5, weight: 800, spacing: 0.4 };
 const TOOL_H = 12;
 
 // Pattern length + edit operations + per-pattern shuffle, in a device header.
-// Laid out right-to-left from `right`.
+// Laid out right-to-left from `right`; returns the left edge it reached.
 export function drawPatternTools(ctx, { state, id, right, led: ledColor }) {
   const pattern = state.pattern(id);
   const y = 3;
@@ -121,4 +121,5 @@ export function drawPatternTools(ctx, { state, id, right, led: ledColor }) {
   lcd(ctx, x + 28, y, 14, TOOL_H);
   text(ctx, String(pattern.length), x + 35, y + TOOL_H / 2 + 0.5, { size: 7, weight: 800, color: C.lcdOn });
   nudge(44, 'right', 1);
+  return x;
 }

@@ -1,4 +1,5 @@
 import { drawAbout } from './about.js';
+import { drawAutomation } from './automation.js';
 import { Bassline } from './devices/bassline.js';
 import { DrumMachine, R808, R909 } from './devices/drum-machine.js';
 import { EffectsColumn } from './devices/effects.js';
@@ -26,6 +27,7 @@ export class Rack {
   // app: { clock, engine, files }
   constructor(state, app, width = RACK_W, height = RACK_H) {
     this.state = state;
+    this.app = app;
     this.devices = [];
     this.width = Math.max(RACK_W, width);
     this.height = Math.max(RACK_H, height);
@@ -75,8 +77,9 @@ export class Rack {
       d.draw(ctx);
       ctx.restore();
     }
-    // Drawn last so its hit regions take every click while it's open.
-    if (this.state.ui.about) drawAbout(ctx, this.width, this.height, this.state);
+    // Windows are drawn last so their hit regions take every click while open.
+    if (this.state.ui.automation) drawAutomation(ctx, this.width, this.height, this.state, this.app);
+    if (this.state.ui.about) drawAbout(ctx, this.width, this.height, this.state, this.app);
   }
 
   drawRail(ctx, x) {

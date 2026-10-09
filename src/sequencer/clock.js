@@ -72,10 +72,18 @@ export class Clock {
     else this.play();
   }
 
+  seekTo(bar) {
+    this.seekBar(bar - this.seekFrom());
+  }
+
+  // While playing, the displayed bar trails the scheduler by the lookahead, so
+  // repeated seeks (held REW/FF) count from the scheduler's position.
+  seekFrom() {
+    return this.t.playing ? Math.floor(this.pos / 16) + 1 : this.t.bar;
+  }
+
   seekBar(delta) {
-    // While playing, the displayed bar trails the scheduler by the lookahead, so
-    // repeated seeks (held REW/FF) count from the scheduler's position.
-    const from = this.t.playing ? Math.floor(this.pos / 16) + 1 : this.t.bar;
+    const from = this.seekFrom();
     const song = this.state.song;
     const last = this.songMode && song.length ? Math.ceil(song.length / TICKS_PER_BAR) : Infinity;
     const bar = Math.min(last, Math.max(1, from + delta));

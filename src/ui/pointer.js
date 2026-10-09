@@ -63,11 +63,13 @@ export function attachPointer(canvas, onChange) {
   canvas.addEventListener(
     'wheel',
     (e) => {
-      const handler = find(e)?.region.handler;
+      const hit = find(e);
+      const handler = hit?.region.handler;
       if (!handler?.wheel) return;
       e.preventDefault();
-      // Shift+wheel arrives as horizontal scroll in most browsers.
-      handler.wheel({ delta: e.deltaY || e.deltaX, fine: e.shiftKey });
+      // Shift+wheel arrives as horizontal scroll in most browsers. dx/dy/zoom are
+      // for views that pan; a trackpad pinch arrives as ctrl+wheel.
+      handler.wheel({ delta: e.deltaY || e.deltaX, dx: e.deltaX, dy: e.deltaY, zoom: e.ctrlKey, fine: e.shiftKey, p: hit.p });
       onChange();
     },
     { passive: false },

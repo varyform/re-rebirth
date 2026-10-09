@@ -2,6 +2,7 @@ import { songBars, TICKS_PER_BAR } from '../../song/song.js';
 import { hits } from '../../ui/hits.js';
 import { click, release, repeat } from '../../ui/handlers.js';
 import { openAbout } from '../about.js';
+import { openAutomation } from '../automation.js';
 import { Knob } from '../controls.js';
 import { drawLogo, LOGO_W } from '../logo.js';
 import { brushed, button, icon, lcd, led, MONO, panel, screws, sevenSeg, sevenSegWidth, text } from '../primitives.js';
@@ -142,7 +143,10 @@ export class Transport {
     icon(ctx, 'loop', lx + 11, 54.5 + off, 8, t.loop ? C.ledYellow : C.inkLight);
     text(ctx, 'LOOP', lx + 27, 55 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.6 });
     hits.rect(ctx, lx, 47, 42, 15, click(() => (t.loop = !t.loop)));
-    text(ctx, 'DROP .RBS / .JSON', SONG_X + 4 * 46 + 4, 55, { size: 5, align: 'left', color: C.inkMuted, spacing: 0.4 });
+    const ax = SONG_X + 4 * 46;
+    const aOff = button(ctx, ax, 47, 58, 15, { pressed: hits.isPressed('song.automation') });
+    text(ctx, 'AUTOMATION', ax + 29, 55 + aOff, { size: 5.6, weight: 800, color: C.inkLight, spacing: 0.4 });
+    hits.rect(ctx, ax, 47, 58, 15, click(() => openAutomation(state), 'song.automation'));
   }
 
   nudgeButton(ctx, dir, y, sign) {

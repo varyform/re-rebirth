@@ -49,6 +49,11 @@ export const C = {
   r808Steps: ['#e8371f', '#f28c1c', '#f4d03a', '#efe9d8'],
 
   logo: ['#ffffff', '#c9ccd2', '#7d828c', '#dfe2e8'],
+
+  // Automation / grid windows
+  screen: ['#0b0c0f', '#12141a'],
+  lanes: { bass1: '#ffb347', bass2: '#ff6a1a', r808: '#f4d03a', r909: '#ef6a1d', mixer: '#d9dce3', fx: '#c08bff' },
+  cellOff: 'rgba(255,255,255,0.07)',
 };
 
 // Knob looks. `pointers`: [color, fromRadius, toRadius, widthRatio].

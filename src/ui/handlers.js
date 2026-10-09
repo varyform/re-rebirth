@@ -2,7 +2,8 @@
 //
 // Handler shape: { cursor, key?, down(ev) -> session?, wheel?(ev), dblclick?() }
 // Session shape: { move?(ev), up?() }
-// ev: { p, p0, prev (local units), ddy (CSS px since last move), fine (shift held), delta (wheel) }
+// ev: { p, p0, prev (local units), ddy (CSS px since last move), fine (shift held) }
+// wheel ev: { delta, dx, dy (CSS px), zoom (ctrl / trackpad pinch), fine, p }
 
 const KNOB_PX = 200; // CSS pixels of vertical drag for a full sweep
 const FINE = 6;

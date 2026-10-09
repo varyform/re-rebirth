@@ -93,8 +93,9 @@ function watchPixelRatio() {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (e.code === 'Escape' && state.ui.about) {
-    state.ui.about = false;
+  if (e.code === 'Escape' && (state.ui.about || state.ui.automation)) {
+    if (state.ui.about) state.ui.about = false;
+    else state.ui.automation = null;
     requestRender();
     return;
   }

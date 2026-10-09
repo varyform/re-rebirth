@@ -23,7 +23,9 @@ export class State {
     this.defaults = new Map();
     this.listeners = new Set();
     this.meters = {};
-    this.ui = { about: false }; // app chrome, not part of a song
+    // App chrome, not part of a song. automation: the open view's scroll/zoom, or
+    // null when closed; grid: drum machines showing all lanes instead of knobs.
+    this.ui = { about: false, automation: null, grid: { r808: false, r909: false } };
     this.clearSong();
   }
 
