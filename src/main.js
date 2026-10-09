@@ -92,6 +92,11 @@ function watchPixelRatio() {
 }
 
 window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && state.ui.about) {
+    state.ui.about = false;
+    requestRender();
+    return;
+  }
   if (e.code !== 'Space' || e.repeat) return;
   e.preventDefault();
   clock.toggle();

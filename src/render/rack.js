@@ -1,3 +1,4 @@
+import { drawAbout } from './about.js';
 import { Bassline } from './devices/bassline.js';
 import { DrumMachine, R808, R909 } from './devices/drum-machine.js';
 import { EffectsColumn } from './devices/effects.js';
@@ -74,6 +75,8 @@ export class Rack {
       d.draw(ctx);
       ctx.restore();
     }
+    // Drawn last so its hit regions take every click while it's open.
+    if (this.state.ui.about) drawAbout(ctx, this.width, this.height, this.state);
   }
 
   drawRail(ctx, x) {

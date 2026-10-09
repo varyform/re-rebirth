@@ -1,8 +1,10 @@
 import { songBars, TICKS_PER_BAR } from '../../song/song.js';
 import { hits } from '../../ui/hits.js';
 import { click, repeat } from '../../ui/handlers.js';
+import { openAbout } from '../about.js';
 import { Knob } from '../controls.js';
-import { brushed, button, FONT, icon, lcd, led, MONO, panel, screws, sevenSeg, sevenSegWidth, text, vgrad } from '../primitives.js';
+import { drawLogo, LOGO_W } from '../logo.js';
+import { brushed, button, icon, lcd, led, MONO, panel, screws, sevenSeg, sevenSegWidth, text } from '../primitives.js';
 import { C, KNOB } from '../theme.js';
 
 const LABEL = { size: 6, color: C.inkMuted, spacing: 1 };
@@ -45,7 +47,8 @@ export class Transport {
     // Controls are laid out for the base height; a taller bar centres them.
     ctx.save();
     ctx.translate(0, Math.max(0, (h - BASE_H) / 2));
-    this.drawLogo(ctx, 20, 38);
+    drawLogo(ctx, 20, 38);
+    hits.rect(ctx, 16, 14, LOGO_W, 40, { ...click(() => openAbout(state)), cursor: 'pointer' });
     this.drawSong(ctx);
     this.shuffle.draw(ctx, state);
 
@@ -170,21 +173,4 @@ export class Transport {
     };
   }
 
-  drawLogo(ctx, x, y) {
-    ctx.save();
-    ctx.font = `italic 900 27px ${FONT}`;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillStyle = 'rgba(0,0,0,0.65)';
-    ctx.fillText('RE-REBIRTH', x + 1, y + 1.5);
-    ctx.fillStyle = vgrad(ctx, y - 21, y + 2, C.logo);
-    ctx.fillText('RE-REBIRTH', x, y);
-    ctx.restore();
-
-    C.r808Steps.forEach((color, i) => {
-      ctx.fillStyle = color;
-      ctx.fillRect(x + 2 + i * 12, y + 9, 9, 3.5);
-    });
-    text(ctx, 'SYNTH & RHYTHM RACK', x + 54, y + 11, { size: 6.5, align: 'left', color: C.inkMuted, spacing: 1.6 });
-  }
 }

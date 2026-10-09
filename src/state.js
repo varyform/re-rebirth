@@ -23,6 +23,7 @@ export class State {
     this.defaults = new Map();
     this.listeners = new Set();
     this.meters = {};
+    this.ui = { about: false }; // app chrome, not part of a song
     this.clearSong();
   }
 
