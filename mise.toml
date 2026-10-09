@@ -1,2 +1,5 @@
 [tools]
 node = "lts"
+# Kamal (deployment) runs on Ruby; the calibration scripts in tools/ on Python (via uv).
+ruby = "4.0"
+python = "3.14"
