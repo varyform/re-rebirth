@@ -40,6 +40,9 @@ const PCF_WAVES = 56;
 const knob = (v) => Math.min(1, v / 127);
 const drumValue = (key, v) => (key.endsWith('.alt') ? (v ? 0 : 1) : knob(v));
 const choice = (i, n) => Math.min(n - 1, Math.max(0, i)) / (n - 1);
+// Delay step mode: measured in a ReBirth export, 0 counts the steps in eighth-note
+// triplets and 1 in sixteenths (the format description has it the other way round).
+const delayTriplet = (v) => (v ? 0 : 1);
 
 class Reader {
   constructor(buffer) {
@@ -155,10 +158,13 @@ function readMixer(r, c, P, version) {
   if (!c) return;
   const o = c.at;
   P['mixer.master.level'] = knob(r.u8(o));
-  // Routing: device ids in the header (0 off, 1 master, 2..5 channels). The
-  // earliest 2.0 files use per-channel flags right after the distortion switch
-  // instead, with none set meaning the master.
-  let comp = r.u8(o + 1);
+  // Routing: device ids in the header. Compressor: 0 off, 1 master, 2..5
+  // channels. Pattern filter: 0 off, 1..4 channels (a test song routed to 2
+  // filtered Bass Line 2, not 1 as the format description says). The earliest
+  // 2.0 files use per-channel flags right after the distortion switch instead;
+  // with no compressor flag set the compressor is off (KiloMix scores much
+  // closer to its ReBirth export that way than with it on the master).
+  let comp = version >= 1 ? r.u8(o + 1) : 0;
   let pcf = r.u8(o + 2);
   CHANNEL_IDS.forEach((id, k) => {
     const b = o + 16 + k * 12;
@@ -167,12 +173,12 @@ function readMixer(r, c, P, version) {
     P[`mixer.${id}.pan`] = knob(r.u8(b + 2));
     P[`mixer.${id}.delay`] = knob(r.u8(b + 3));
     P[`mixer.${id}.dist`] = r.u8(b + 4) ? 1 : 0;
-    if (r.u8(b + 5)) pcf = k + 2;
+    if (r.u8(b + 5)) pcf = k + 1;
     if (r.u8(b + 6)) comp = k + 2;
   });
-  if (version >= 1) P['fx.comp.routed'] = comp >= 1 && comp <= 5 ? 1 : 0;
+  P['fx.comp.routed'] = comp >= 1 && comp <= 5 ? 1 : 0;
   P['fx.comp.target'] = choice(Math.min(Math.max(comp - 1, 0), COMP_TARGETS.length - 1), COMP_TARGETS.length);
-  P['fx.pcf.target'] = choice(pcf >= 2 ? pcf - 1 : 0, PCF_TARGETS.length);
+  P['fx.pcf.target'] = choice(pcf < PCF_TARGETS.length ? pcf : 0, PCF_TARGETS.length);
 }
 
 function readEffects(r, dev, find, P) {
@@ -181,7 +187,7 @@ function readEffects(r, dev, find, P) {
     const o = dly.at;
     P['fx.delay.on'] = r.u8(o) ? 1 : 0;
     P['fx.delay.steps'] = choice(r.u8(o + 1) - 1, DELAY_STEPS);
-    P['fx.delay.triplet'] = r.u8(o + 2) ? 1 : 0;
+    P['fx.delay.triplet'] = delayTriplet(r.u8(o + 2));
     P['fx.delay.feedback'] = knob(r.u8(o + 3));
     P['fx.delay.pan'] = knob(r.u8(o + 4));
   }
@@ -294,7 +300,8 @@ const FX_KEYS = [
   ['fx.comp', ['on', 'amount', 'threshold']],
 ];
 const fxValue = (key, v) => {
-  if (key.endsWith('.on') || key.endsWith('.triplet') || key === 'fx.pcf.mode') return v ? 1 : 0;
+  if (key === 'fx.delay.triplet') return delayTriplet(v);
+  if (key.endsWith('.on') || key === 'fx.pcf.mode') return v ? 1 : 0;
   if (key === 'fx.delay.steps') return choice(v - 1, DELAY_STEPS);
   if (key === 'fx.pcf.wave') return choice(v, PCF_WAVES);
   return knob(v);
@@ -320,9 +327,9 @@ function readTracks(r, traks, song, version) {
   song.tracks.mixer = version >= 1 ? convertMixer201(mixer ?? []) : convertMixer(mixer ?? []);
 }
 
-// Later ReBirth 2.0 / 2.0.1 mixer controllers: 1 compressor device, 2 PCF device
-// (0 off, 1 master, 2..5 channels), then per channel k ids 6+6k+n:
-// n=0 level, 1 pan, 2 delay send, 3 distortion on.
+// Later ReBirth 2.0 / 2.0.1 mixer controllers: 1 compressor device (0 off,
+// 1 master, 2..5 channels), 2 PCF device (0 off, 1..4 channels), then per
+// channel k ids 6+6k+n: n=0 level, 1 pan, 2 delay send, 3 distortion on.
 function convertMixer201(events) {
   const out = [];
   for (const { tick, id, value } of events) {
@@ -331,7 +338,7 @@ function convertMixer201(events) {
       out.push({ tick, key: 'fx.comp.routed', value: value ? 1 : 0 });
       if (value) out.push({ tick, key: 'fx.comp.target', value: choice(Math.min(value - 1, COMP_TARGETS.length - 1), COMP_TARGETS.length) });
     }
-    if (id === 2 && value <= 5) out.push({ tick, key: 'fx.pcf.target', value: choice(value >= 2 ? value - 1 : 0, PCF_TARGETS.length) });
+    if (id === 2 && value < PCF_TARGETS.length) out.push({ tick, key: 'fx.pcf.target', value: choice(value, PCF_TARGETS.length) });
     if (id < 6 || id >= 30) continue;
     const chId = CHANNEL_IDS[Math.floor((id - 6) / 6)];
     const n = (id - 6) % 6;
@@ -345,8 +352,8 @@ function convertMixer201(events) {
 
 // ReBirth 2.0 mixer controllers: per channel k, id 5+8k+n: n=0 level, 1 pan, 2 delay send,
 // 3 distortion on, 4 pattern filter on this channel, 5 compressor on this
-// channel (none set = compressor on master). The routing flags become our
-// single target params, resolved per tick.
+// channel (none set = compressor off). The routing flags become our single
+// target params, resolved per tick.
 function convertMixer(events) {
   const out = [];
   const flags = { pcf: [0, 0, 0, 0], comp: [0, 0, 0, 0] };
@@ -355,9 +362,12 @@ function convertMixer(events) {
     const pcfCh = flags.pcf.findIndex(Boolean);
     const compCh = flags.comp.findIndex(Boolean);
     const pcf = choice(pcfCh + 1, PCF_TARGETS.length);
-    const comp = choice(compCh >= 0 ? compCh + 1 : 0, COMP_TARGETS.length); // 0 = master
+    const comp = compCh + 1; // 0 = off
     if (pcf !== last.pcf) out.push({ tick, key: 'fx.pcf.target', value: pcf });
-    if (comp !== last.comp) out.push({ tick, key: 'fx.comp.target', value: comp });
+    if (comp !== last.comp) {
+      out.push({ tick, key: 'fx.comp.routed', value: comp ? 1 : 0 });
+      if (comp) out.push({ tick, key: 'fx.comp.target', value: choice(comp, COMP_TARGETS.length) });
+    }
     last = { pcf, comp };
   };
   for (let i = 0; i < events.length; i++) {
