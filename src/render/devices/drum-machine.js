@@ -6,24 +6,43 @@ import { brushed, button, led, line, panel, rrect, screws, shade, text, textWidt
 import { C, KNOB, SELECTOR } from '../theme.js';
 
 const HEADER_H = 18;
-const BOTTOM_Y = 118;
 const STEP_X = 214;
-// Bottom section rows, relative to BOTTOM_Y.
-const TRACK_NAME_Y = BOTTOM_Y + 7;
-const STEP_LED_Y = BOTTOM_Y + 16;
-const STEP_BTN_Y = BOTTOM_Y + 23;
-const STEP_BTN_H = 22;
-const STEP_NUM_Y = BOTTOM_Y + 52;
-const GROUP_LINE_Y = BOTTOM_Y + 59;
+const MAX_STEP_BTN_W = 46;
+const SELECTOR_H = 52;
+
+// Vertical positions for a panel of height h (minimum 188): extra height is shared
+// by the knob section (rows spread apart) and the step section (rows spread,
+// buttons a little taller).
+function layout(h) {
+  const extra = Math.max(0, h - 188);
+  const bottomY = 118 + (extra * 100) / 170;
+  const kv = (bottomY - HEADER_H) / 100;
+  const bottomH = h - bottomY;
+  const bv = bottomH / 70;
+  const at = (offset) => bottomY + offset * bv;
+  return {
+    bottomY,
+    knobTop: (top) => HEADER_H + (top - HEADER_H) * kv,
+    knobRowH: (rowH) => rowH * kv,
+    trackNameY: at(7),
+    stepLedY: at(16),
+    stepBtnY: at(23),
+    stepBtnH: Math.min(34, 22 * bv),
+    stepNumY: at(52),
+    groupLineY: at(59),
+    selectorY: bottomY + (bottomH - SELECTOR_H) / 2 + 2,
+  };
+}
 const GROUP_LABEL = { size: 6.3, weight: 800, spacing: 0.3 };
 
 export class DrumMachine {
   constructor(state, app, x, y, w, h, cfg) {
     Object.assign(this, { state, app, x, y, w, h, cfg, id: cfg.id });
+    this.V = layout(h);
     this.knobs = [];
     state.define(`${cfg.id}.on`, 1);
     this.groups = this.layoutGroups();
-    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: BOTTOM_Y + 11, w: 176, theme: cfg.selector, state });
+    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: this.V.selectorY, w: 176, theme: cfg.selector, state });
   }
 
   // Spreads instrument groups across the panel; each group is a small knob grid.
@@ -46,7 +65,7 @@ export class DrumMachine {
         this.knobs.push(
           new Knob({
             x: gx + pad + ((cols - inRow) * L.cellW) / 2 + (col + 0.5) * L.cellW,
-            y: L.top + row * L.rowH,
+            y: this.V.knobTop(L.top) + row * this.V.knobRowH(L.rowH),
             r: L.r,
             param,
             label,
@@ -66,6 +85,7 @@ export class DrumMachine {
   draw(ctx) {
     const { w, h, cfg, state } = this;
     const t = cfg.theme;
+    const BOTTOM_Y = this.V.bottomY;
 
     panel(ctx, 0, 0, w, h, t.panel);
     if (t.brushed) brushed(ctx, 0, HEADER_H, w, BOTTOM_Y - HEADER_H, t.brushed);
@@ -108,6 +128,7 @@ export class DrumMachine {
     const t = cfg.theme;
     const dev = state.drums[cfg.id];
     const selected = dev.selected;
+    const BOTTOM_Y = this.V.bottomY;
     this.groups.forEach((g, i) => {
       const cx = g.x + g.w / 2;
       // Groups with two voices (hi-hat, cymbal) alternate between them on repeat clicks.
@@ -142,7 +163,8 @@ export class DrumMachine {
     const pattern = state.pattern(cfg.id);
     const track = state.drumTrack(cfg.id, dev.selected);
     const stepW = (w - 18 - STEP_X) / 16;
-    const bw = stepW - 6;
+    const bw = Math.min(MAX_STEP_BTN_W, stepW - 6);
+    const { trackNameY: TRACK_NAME_Y, stepLedY: STEP_LED_Y, stepBtnY: STEP_BTN_Y, stepBtnH: STEP_BTN_H, stepNumY: STEP_NUM_Y, groupLineY: GROUP_LINE_Y } = this.V;
     const playhead = state.transport.playing ? (state.transport.positions[cfg.id] ?? -1) : -1;
     const hint = cfg.id === 'r909' ? '   SHIFT-CLICK: ON / ACCENT / FLAM' : '';
 

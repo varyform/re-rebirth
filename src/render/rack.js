@@ -14,19 +14,36 @@ const GAP = 3;
 const INSTRUMENT_W = 772;
 const EFFECTS_W = 300;
 
-// Design-space width of the rack: the app's minimum (1:1) size.
+// Minimum (1:1) design size. The rack can be built larger in either direction;
+// devices then spread their controls into the extra room.
 export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + EFFECTS_W;
+export const RACK_H = MARGIN * 2 + TRANSPORT_H + GAP + (BASS_H + GAP) * 2 + (DRUM_H + GAP) * 2 - GAP;
+// Beyond this much stretch, extra window space becomes empty margin around the rack.
+export const MAX_STRETCH = { w: 1.6, h: 1.4 };
 
 export class Rack {
   // app: { clock, engine, files }
-  constructor(state, app) {
+  constructor(state, app, width = RACK_W, height = RACK_H) {
     this.state = state;
     this.devices = [];
+    this.width = Math.max(RACK_W, width);
+    this.height = Math.max(RACK_H, height);
+
+    // Extra width goes to both columns in proportion to their base widths; extra
+    // height to the instrument rows in proportion to theirs (the transport keeps
+    // a small share).
+    const extraW = this.width - RACK_W;
+    const instW = INSTRUMENT_W + (extraW * INSTRUMENT_W) / (INSTRUMENT_W + EFFECTS_W);
+    const fxW = this.width - RAIL_W * 2 - GAP - instW;
+    const extraH = this.height - RACK_H;
+    const rows = BASS_H * 2 + DRUM_H * 2;
+    const transportH = TRANSPORT_H + extraH * 0.08;
+    const grow = (h) => h + ((extraH - (transportH - TRANSPORT_H)) * h) / rows;
+
     const x = RAIL_W;
     let y = MARGIN;
-
-    this.devices.push(new Transport(state, app, x, y, RACK_W - RAIL_W * 2, TRANSPORT_H));
-    y += TRANSPORT_H + GAP;
+    this.devices.push(new Transport(state, app, x, y, this.width - RAIL_W * 2, transportH));
+    y += transportH + GAP;
 
     const top = y;
     const bands = [];
@@ -36,16 +53,14 @@ export class Rack {
       [(...r) => new DrumMachine(state, app, ...r, R808), DRUM_H],
       [(...r) => new DrumMachine(state, app, ...r, R909), DRUM_H],
     ];
-    for (const [make, h] of instruments) {
-      this.devices.push(make(x, y, INSTRUMENT_W, h));
+    for (const [make, base] of instruments) {
+      const h = grow(base);
+      this.devices.push(make(x, y, instW, h));
       bands.push({ y: y - top, h });
       y += h + GAP;
     }
     const bottom = y - GAP;
-    this.devices.push(new EffectsColumn(state, x + INSTRUMENT_W + GAP, top, EFFECTS_W, bottom - top, bands, GAP));
-
-    this.width = RACK_W;
-    this.height = bottom + MARGIN;
+    this.devices.push(new EffectsColumn(state, x + instW + GAP, top, fxW, bottom - top, bands, GAP));
   }
 
   draw(ctx) {

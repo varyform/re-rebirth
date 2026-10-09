@@ -1,7 +1,7 @@
 import './style.css';
 import { AudioEngine } from './audio/engine.js';
 import { loadDemo } from './demo.js';
-import { Rack } from './render/rack.js';
+import { MAX_STRETCH, Rack, RACK_H, RACK_W } from './render/rack.js';
 import { Clock } from './sequencer/clock.js';
 import { Files } from './song/files.js';
 import { State } from './state.js';
@@ -26,7 +26,7 @@ const files = new Files(state, {
 });
 const app = { clock, engine, files };
 // Controls register their parameter defaults here, so build the rack before loading.
-const rack = new Rack(state, app);
+let rack = new Rack(state, app);
 
 if (!files.restore()) loadDemo(state);
 
@@ -59,10 +59,16 @@ function animate() {
   requestAnimationFrame(animate);
 }
 
-// Scale to fit the window while keeping the aspect ratio, never below 1:1.
-// Smaller windows scroll, like the original rack did.
+// Fill the window: one uniform scale (fit the tighter dimension, never below
+// 1:1), and the rack is rebuilt wider or taller to use the rest, up to
+// MAX_STRETCH. Smaller windows scroll, like the original rack did.
 function resize() {
-  const scale = Math.max(1, Math.min(window.innerWidth / rack.width, window.innerHeight / rack.height));
+  const W = window.innerWidth;
+  const H = window.innerHeight;
+  const scale = Math.max(1, Math.min(W / RACK_W, H / RACK_H));
+  const width = Math.round(Math.min(RACK_W * MAX_STRETCH.w, Math.max(RACK_W, W / scale)));
+  const height = Math.round(Math.min(RACK_H * MAX_STRETCH.h, Math.max(RACK_H, H / scale)));
+  if (width !== rack.width || height !== rack.height) rack = new Rack(state, app, width, height);
   const cssW = Math.floor(rack.width * scale);
   const cssH = Math.floor(rack.height * scale);
   const dpr = window.devicePixelRatio || 1;

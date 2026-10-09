@@ -26,12 +26,18 @@ const CH_BUTTONS = [
 const ROW_A = 117; // mute / solo
 const ROW_B = 133; // distortion / pattern filter / compressor routing
 const styleFor = (accent) => ({ ...KNOB.fx, pointers: [[accent, 0.22, 0.95, 0.15]] });
+// Effect modules are laid out for this size; a larger rack spreads them
+// horizontally and centres their contents vertically.
+const BASE_W = 300;
+const BASE_MODULE_H = 92;
 
 // Right-hand column. Module rows line up with the instrument rows beside it
 // (`bands`): the mixer spans both bass lines, each drum row holds two effects.
 export class EffectsColumn {
   constructor(state, x, y, w, h, bands, gap) {
     Object.assign(this, { state, x, y, w, h });
+    this.k = w / BASE_W;
+    this.chW = (w - 10) / (CHANNELS.length + 1);
     const rects = moduleRects(bands, gap);
     this.modules = MODULES.map((m) => ({ ...m, ...rects[m.key], w, knobs: [] }));
     this.mod = Object.fromEntries(this.modules.map((m) => [m.key, m]));
@@ -48,37 +54,42 @@ export class EffectsColumn {
   layoutMixer(m) {
     const small = { ticks: 7, labelSize: 5.5 };
     CHANNELS.forEach(([id], i) => {
-      const cx = 6 + i * CH_W + CH_W / 2;
+      const cx = this.chX(i) + CH_W / 2;
       this.addKnob(m, cx, 52, 10, `mixer.${id}.pan`, 'PAN', 0.5, small);
       this.addKnob(m, cx, 94, 10, `mixer.${id}.delay`, 'DELAY', i === 0 ? 0.4 : 0.1, { ...small, style: styleFor(C.delay) });
       for (const [, k] of CH_BUTTONS) this.state.define(`mixer.${id}.${k}`, k === 'dist' && i === 0 ? 1 : 0);
       this.state.define(`mixer.${id}.level`, 0.72);
     });
-    const cx = 6 + CHANNELS.length * CH_W + CH_W / 2;
+    const cx = this.chX(CHANNELS.length) + CH_W / 2;
     this.addKnob(m, cx, 52, 10, 'mixer.delayReturn', 'DLY RTN', 0.6, { ...small, style: styleFor(C.delay) });
     this.state.define('mixer.master.level', 0.8);
   }
 
+  // Left edge of mixer strip i's 58-wide content, centred in its share of the width.
+  chX(i) {
+    return 6 + i * this.chW + (this.chW - CH_W) / 2;
+  }
+
   layoutEffects() {
     const { delay, dist, comp, pcf } = this.mod;
-    const { state } = this;
-    this.addKnob(delay, 116, 50, 14, 'fx.delay.steps', 'STEPS', 2 / (DELAY_STEPS - 1), { ticks: 9 });
-    this.addKnob(delay, 180, 50, 14, 'fx.delay.feedback', 'FEEDBACK', 0.45);
-    this.addKnob(delay, 244, 50, 14, 'fx.delay.pan', 'PAN', 0.5);
+    const { state, k } = this;
+    this.addKnob(delay, 116 * k, 50, 14, 'fx.delay.steps', 'STEPS', 2 / (DELAY_STEPS - 1), { ticks: 9 });
+    this.addKnob(delay, 180 * k, 50, 14, 'fx.delay.feedback', 'FEEDBACK', 0.45);
+    this.addKnob(delay, 244 * k, 50, 14, 'fx.delay.pan', 'PAN', 0.5);
     state.define('fx.delay.triplet', 0);
 
-    this.addKnob(dist, 44, 50, 14, 'fx.dist.amount', 'AMOUNT', 0.4);
-    this.addKnob(dist, 110, 50, 14, 'fx.dist.shape', 'SHAPE', 0.55);
+    this.addKnob(dist, 44 * k, 50, 14, 'fx.dist.amount', 'AMOUNT', 0.4);
+    this.addKnob(dist, 110 * k, 50, 14, 'fx.dist.shape', 'SHAPE', 0.55);
 
-    this.addKnob(comp, 44, 50, 14, 'fx.comp.amount', 'AMOUNT', 0.3);
-    this.addKnob(comp, 110, 50, 14, 'fx.comp.threshold', 'THRESHOLD', 0.5);
+    this.addKnob(comp, 44 * k, 50, 14, 'fx.comp.amount', 'AMOUNT', 0.3);
+    this.addKnob(comp, 110 * k, 50, 14, 'fx.comp.threshold', 'THRESHOLD', 0.5);
     state.define('fx.comp.target', 0);
     state.define('fx.comp.routed', 1);
 
-    this.addKnob(pcf, 156, 38, 10, 'fx.pcf.freq', 'FREQ', 0.45, { labelSize: 5.5 });
-    this.addKnob(pcf, 194, 38, 10, 'fx.pcf.reso', 'RESO', 0.5, { labelSize: 5.5 });
-    this.addKnob(pcf, 232, 38, 10, 'fx.pcf.amount', 'AMOUNT', 0.6, { labelSize: 5.5 });
-    this.addKnob(pcf, 270, 38, 10, 'fx.pcf.decay', 'DECAY', 0.4, { labelSize: 5.5 });
+    this.addKnob(pcf, 156 * k, 38, 10, 'fx.pcf.freq', 'FREQ', 0.45, { labelSize: 5.5 });
+    this.addKnob(pcf, 194 * k, 38, 10, 'fx.pcf.reso', 'RESO', 0.5, { labelSize: 5.5 });
+    this.addKnob(pcf, 232 * k, 38, 10, 'fx.pcf.amount', 'AMOUNT', 0.6, { labelSize: 5.5 });
+    this.addKnob(pcf, 270 * k, 38, 10, 'fx.pcf.decay', 'DECAY', 0.4, { labelSize: 5.5 });
     state.define('fx.pcf.wave', 0);
     state.define('fx.pcf.mode', 1);
     state.define('fx.pcf.target', 0);
@@ -91,10 +102,15 @@ export class EffectsColumn {
       ctx.translate(0, m.y);
       this.drawFrame(ctx, m);
       if (m.key === 'mixer') this.drawMixer(ctx, m);
-      if (m.key === 'delay') this.drawDelay(ctx, m);
-      if (m.key === 'dist') this.drawDist(ctx, m);
-      if (m.key === 'comp') this.drawComp(ctx, m);
-      if (m.key === 'pcf') this.drawPcf(ctx, m);
+      else {
+        // Effect contents keep their base height, centred below the title bar.
+        ctx.translate(0, Math.max(0, (m.h - BASE_MODULE_H) / 2));
+        const base = { ...m, h: BASE_MODULE_H };
+        if (m.key === 'delay') this.drawDelay(ctx, base);
+        if (m.key === 'dist') this.drawDist(ctx, base);
+        if (m.key === 'comp') this.drawComp(ctx, base);
+        if (m.key === 'pcf') this.drawPcf(ctx, base);
+      }
       for (const k of m.knobs) k.draw(ctx, state);
       ctx.restore();
     }
@@ -125,18 +141,19 @@ export class EffectsColumn {
     };
 
     CHANNELS.forEach(([id, label], i) => {
-      const x0 = 6 + i * CH_W;
+      const x0 = this.chX(i);
       strip(x0, label, `mixer.${id}.level`);
       this.drawMeter(ctx, x0 + 36, FADER_Y + 2, faderH - 4, state.meters[id] ?? 0);
       this.drawChannelButtons(ctx, x0, id, i);
+      const sx = 6 + (i + 1) * this.chW;
       ctx.lineWidth = 1;
       ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-      line(ctx, x0 + CH_W - 1.5, 20, x0 + CH_W - 1.5, m.h - 6);
+      line(ctx, sx - 1.5, 20, sx - 1.5, m.h - 6);
       ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-      line(ctx, x0 + CH_W - 0.5, 20, x0 + CH_W - 0.5, m.h - 6);
+      line(ctx, sx - 0.5, 20, sx - 0.5, m.h - 6);
     });
 
-    const x0 = 6 + CHANNELS.length * CH_W;
+    const x0 = this.chX(CHANNELS.length);
     strip(x0, 'MASTER', 'mixer.master.level');
     const level = state.meters.master ?? 0;
     this.drawMeter(ctx, x0 + 33, FADER_Y + 2, faderH - 4, level, 5);
@@ -199,8 +216,9 @@ export class EffectsColumn {
     const { state } = this;
     // Echo output level, so feedback tails are visible.
     const echo = this.fxMeters().delay ?? 0;
-    this.ledRow(ctx, 100, m.h - 16, m.w - 114, 12, Math.round(echo * 12), { color: C.delay });
-    text(ctx, 'ECHO', 96, m.h - 13.5, { size: 5.5, align: 'right', color: C.inkMuted, spacing: 0.6 });
+    const ex = 100 * this.k;
+    this.ledRow(ctx, ex, m.h - 16, m.w - 14 - ex, 12, Math.round(echo * 12), { color: C.delay });
+    text(ctx, 'ECHO', ex - 4, m.h - 13.5, { size: 5.5, align: 'right', color: C.inkMuted, spacing: 0.6 });
     const steps = String(state.choice('fx.delay.steps', DELAY_STEPS) + 1);
     lcd(ctx, 14, 24, 52, 36);
     sevenSeg(ctx, steps, 14 + (52 - sevenSegWidth(steps, 12)) / 2, 30, 12, 24);
@@ -214,7 +232,7 @@ export class EffectsColumn {
   // Distortion is switched per channel (D buttons in the mixer): show which, and
   // the level coming out of the distortion.
   drawDist(ctx, m) {
-    const x = 160;
+    const x = 160 * this.k;
     const w = m.w - x - 14;
     lcd(ctx, x, 26, w, 18, C.lcdGreen);
     const on = this.state.on01('fx.dist.on') ? CHANNELS.filter(([id]) => this.state.on01(`mixer.${id}.dist`)).map(([, label]) => label.replace(/\D+/g, (s) => s[0])) : [];
@@ -229,7 +247,7 @@ export class EffectsColumn {
   // is set with the mixer's C buttons; none lit = master.
   drawComp(ctx, m) {
     const { state } = this;
-    const x = 160;
+    const x = 160 * this.k;
     const w = m.w - x - 14;
     const routed = state.on01('fx.comp.routed');
     const where = !state.on01('fx.comp.on') || !routed ? 'OFF' : COMP_TARGETS[state.choice('fx.comp.target', COMP_TARGETS.length)];
@@ -256,7 +274,7 @@ export class EffectsColumn {
     const { state } = this;
     const x = 12;
     const y = 22;
-    const w = 120;
+    const w = 120 * this.k;
     const h = 46;
     const wave = state.choice('fx.pcf.wave', PCF_WAVE_COUNT);
     lcd(ctx, x, y, w, h, C.lcdGreen);
@@ -301,7 +319,7 @@ export class EffectsColumn {
     const off = button(ctx, x + 40, 74, 34, 13, { pressed: hits.isPressed('pcf.mode') });
     text(ctx, lp ? 'LOWPASS' : 'BANDPASS', x + 57, 80.5 + off, { size: 5, weight: 800, color: C.inkLight });
     hits.rect(ctx, x + 40, 74, 34, 13, click(() => state.toggle('fx.pcf.mode'), 'pcf.mode'));
-    this.drawChoice(ctx, 146, 72, m.w - 160, 'fx.pcf.target', PCF_TARGETS, null);
+    this.drawChoice(ctx, 146 * this.k, 72, m.w - 14 - 146 * this.k, 'fx.pcf.target', PCF_TARGETS, null);
   }
 }
 

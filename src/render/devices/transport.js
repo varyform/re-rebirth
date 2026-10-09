@@ -16,6 +16,8 @@ const BUTTONS = [
 const SONG_X = 214;
 const SONG_W = 250;
 
+const BASE_H = 72;
+
 export class Transport {
   constructor(state, app, x, y, w, h) {
     Object.assign(this, { state, app, x, y, w, h });
@@ -40,6 +42,9 @@ export class Transport {
     panel(ctx, 0, 0, w, h, C.transport);
     brushed(ctx, 0, 0, w, h, 0.35);
     screws(ctx, w, h, 7, 8);
+    // Controls are laid out for the base height; a taller bar centres them.
+    ctx.save();
+    ctx.translate(0, Math.max(0, (h - BASE_H) / 2));
     this.drawLogo(ctx, 20, 38);
     this.drawSong(ctx);
     this.shuffle.draw(ctx, state);
@@ -93,6 +98,7 @@ export class Transport {
     ctx.restore();
 
     this.master.draw(ctx, state);
+    ctx.restore();
   }
 
   // Song name + arrangement status, file buttons, loop switch.
