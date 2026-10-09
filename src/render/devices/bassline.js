@@ -26,20 +26,22 @@ const EDIT_BUTTONS = [
   ['SLIDE', 252, 1, (s) => s.slide, (s) => (s.slide = !s.slide)],
 ];
 
-// Positions for a panel of size w x h (minimum 772 x 162). Extra width spreads the
+// Positions for a panel of size w x h (minimum 772 x 156). Extra width spreads the
 // knobs and steps, with the pattern selector anchored right; extra height is shared
 // by the knob section (content centred) and the sequencer (rows spread apart).
+// The knob section (18..80) fits the pattern selector with equal room above and below.
 function layout(w, h) {
-  const extraH = Math.max(0, h - 162);
-  const knobExtra = (extraH * 68) / 144;
-  const seqY = 86 + knobExtra;
+  const extraH = Math.max(0, h - 156);
+  const knobExtra = (extraH * 62) / 138;
+  const seqY = 80 + knobExtra;
   const sv = (h - seqY) / 76; // sequencer stretch
   const at = (offset) => seqY + offset * sv;
   const noteTop = at(4);
   const pad = at(54);
   const selectorX = w - 20 - SELECTOR_W;
   return {
-    knobY: 58 + knobExtra / 2,
+    knobY: 55.5 + knobExtra / 2,
+    selectorY: 22 + knobExtra / 2,
     knobX: (i) => 102 + (i * (selectorX - 54 - 102)) / 6,
     selectorX,
     seqY,
@@ -66,7 +68,7 @@ export class Bassline {
       state.define(P(k), def);
       return new Knob({ x: L.knobX(i), y: L.knobY, r: 15, param: P(k), label, labelPos: 'above', style: KNOB.bass, labelColor: C.bassInk, labelSize: 6.5 });
     });
-    this.selector = new PatternSelector({ id, x: L.selectorX, y: L.knobY - 30, w: SELECTOR_W, theme: SELECTOR.bass, state });
+    this.selector = new PatternSelector({ id, x: L.selectorX, y: L.selectorY, w: SELECTOR_W, theme: SELECTOR.bass, state });
   }
 
   draw(ctx) {
@@ -109,7 +111,8 @@ export class Bassline {
 
   drawWaveSwitch(ctx, cx, cy) {
     const square = this.state.get(this.waveParam) >= 0.5;
-    text(ctx, 'WAVEFORM', cx, cy - 24, { size: 6.5, color: C.bassInk });
+    // On the knob label line (knob labels sit at knobY - r - 10).
+    text(ctx, 'WAVEFORM', cx, cy - 21, { size: 6.5, color: C.bassInk });
     rrect(ctx, cx - 17, cy - 7.5, 34, 15, 7.5);
     ctx.fillStyle = vgrad(ctx, cy - 7.5, cy + 7.5, ['#0b0b0c', '#2a2b2e']);
     ctx.fill();

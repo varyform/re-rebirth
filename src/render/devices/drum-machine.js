@@ -10,13 +10,14 @@ const STEP_X = 214;
 const MAX_STEP_BTN_W = 46;
 const SELECTOR_H = 52;
 
-// Vertical positions for a panel of height h (minimum 188): extra height is shared
-// by the knob section (rows spread apart) and the step section (rows spread,
-// buttons a little taller).
-function layout(h) {
-  const extra = Math.max(0, h - 188);
-  const bottomY = 118 + (extra * 100) / 170;
-  const kv = (bottomY - HEADER_H) / 100;
+// Vertical positions for a panel of height h (minimum base.h): extra height is
+// shared by the knob section (rows spread apart) and the step section (rows
+// spread, buttons a little taller). base.knobs is where the 70-unit step section
+// starts at minimum height.
+function layout(h, base) {
+  const extra = Math.max(0, h - base.h);
+  const bottomY = base.knobs + (extra * 100) / 170;
+  const kv = (bottomY - HEADER_H) / (base.knobs - HEADER_H);
   const bottomH = h - bottomY;
   const bv = bottomH / 70;
   const at = (offset) => bottomY + offset * bv;
@@ -48,7 +49,7 @@ const GRID_HINT = {
 export class DrumMachine {
   constructor(state, app, x, y, w, h, cfg) {
     Object.assign(this, { state, app, x, y, w, h, cfg, id: cfg.id });
-    this.V = layout(h);
+    this.V = layout(h, cfg.base);
     this.knobs = [];
     state.define(`${cfg.id}.on`, 1);
     this.groups = this.layoutGroups();
@@ -458,7 +459,9 @@ export const R808 = {
     groupLine: C.r808Steps,
     brushed: 0.15,
   },
-  layout: { cols: 1, cellW: 50, rowH: 26, r: 8.5, top: 45 },
+  // Rows far enough apart that a knob's label clears the tick marks of the one below.
+  base: { h: 200, knobs: 130 },
+  layout: { cols: 1, cellW: 50, rowH: 31.5, r: 8, top: 45.5 },
   groups: [
     { id: 'bd', label: 'BASS DRUM', tracks: ['bd'], knobs: [['level', 'LEVEL', 0.8], ['tone', 'TONE', 0.5], ['decay', 'DECAY', 0.6]] },
     { id: 'sd', label: 'SNARE DRUM', tracks: ['sd'], knobs: [['level', 'LEVEL', 0.7], ['tone', 'TONE', 0.5], ['snappy', 'SNAPPY', 0.6]] },
@@ -504,6 +507,7 @@ export const R909 = {
     groupLine: ['#ef6a1d', '#8e8f8a'],
     brushed: 0.55,
   },
+  base: { h: 188, knobs: 118 },
   layout: { cols: 2, cellW: 32, rowH: 36, r: 10, top: 50 },
   groups: [
     { id: 'bd', label: 'BASS DRUM', tracks: ['bd'], knobs: [['tune', 'TUNE', 0.5], ['level', 'LEVEL', 0.8], ['attack', 'ATTACK', 0.4], ['decay', 'DECAY', 0.6]] },

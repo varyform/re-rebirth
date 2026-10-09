@@ -10,8 +10,10 @@ import { C } from './theme.js';
 const RAIL_W = 14;
 const MARGIN = 4;
 const TRANSPORT_H = 72;
-const BASS_H = 162;
-const DRUM_H = 188;
+const BASS_H = 156;
+// Drum 08 is taller: its single-column knob groups stack three knobs deep.
+const DRUM08_H = 200;
+const DRUM09_H = 188;
 const GAP = 3;
 const INSTRUMENT_W = 772;
 const EFFECTS_W = 300;
@@ -19,7 +21,8 @@ const EFFECTS_W = 300;
 // Minimum (1:1) design size. The rack can be built larger in either direction;
 // devices then spread their controls into the extra room.
 export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + EFFECTS_W;
-export const RACK_H = MARGIN * 2 + TRANSPORT_H + GAP + (BASS_H + GAP) * 2 + (DRUM_H + GAP) * 2 - GAP;
+const ROWS_H = BASS_H * 2 + DRUM08_H + DRUM09_H;
+export const RACK_H = MARGIN * 2 + TRANSPORT_H + GAP + ROWS_H + GAP * 3;
 // Beyond this much stretch, extra window space becomes empty margin around the rack.
 export const MAX_STRETCH = { w: 1.6, h: 1.4 };
 
@@ -39,7 +42,7 @@ export class Rack {
     const instW = INSTRUMENT_W + (extraW * INSTRUMENT_W) / (INSTRUMENT_W + EFFECTS_W);
     const fxW = this.width - RAIL_W * 2 - GAP - instW;
     const extraH = this.height - RACK_H;
-    const rows = BASS_H * 2 + DRUM_H * 2;
+    const rows = ROWS_H;
     const transportH = TRANSPORT_H + extraH * 0.08;
     const grow = (h) => h + ((extraH - (transportH - TRANSPORT_H)) * h) / rows;
 
@@ -53,8 +56,8 @@ export class Rack {
     const instruments = [
       [(...r) => new Bassline(state, app, ...r, { id: 'bass1', number: 1 }), BASS_H],
       [(...r) => new Bassline(state, app, ...r, { id: 'bass2', number: 2 }), BASS_H],
-      [(...r) => new DrumMachine(state, app, ...r, R808), DRUM_H],
-      [(...r) => new DrumMachine(state, app, ...r, R909), DRUM_H],
+      [(...r) => new DrumMachine(state, app, ...r, R808), DRUM08_H],
+      [(...r) => new DrumMachine(state, app, ...r, R909), DRUM09_H],
     ];
     for (const [make, base] of instruments) {
       const h = grow(base);
