@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+### Sound
+- **Bass lines rebuilt from measurements.** A ReBirth test song with one bass setting per bar gave the new voice:
+  - The cutoff knob covers ReBirth's darker, narrower range.
+  - Resonance peaks get sharper the higher the filter sits, and they no longer make the bass quieter.
+  - Env mod lowers the resting cutoff as it widens the sweep.
+  - The decay knob ranges from a click to a two-second fall.
+  - Accent adds its own short sweep and a punch that lasts one step.
+  - Notes are shorter: the gate is half a step, with a soft release.
+  - Slides are quicker.
+  - The square wave is ReBirth's slightly lopsided pulse.
+  - More of the low fundamental comes through.
+
 ## 0.3.0 — 2026-10-09
 
 ### New
