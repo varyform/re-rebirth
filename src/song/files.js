@@ -3,6 +3,8 @@ import { isRbs, parseRbs } from './rbs.js';
 import { applySession, serialize } from './session.js';
 
 const AUTOSAVE_KEY = 're-rebirth.session';
+// iPadOS reports itself as a Mac, so also check for touch.
+const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const AUTOSAVE_DELAY = 800;
 
 export class Files {
@@ -32,9 +34,21 @@ export class Files {
     this.onLoaded?.(this.state);
   }
 
+  // Must run inside a user gesture (see `release` in ui/handlers.js).
   pick() {
-    const input = Object.assign(document.createElement('input'), { type: 'file', accept: '.rbs,.json,application/json' });
-    input.addEventListener('change', () => input.files[0] && this.open(input.files[0]));
+    // iOS has no file type for .rbs, so an `accept` filter greys those files out
+    // in the picker; it gets an unfiltered picker and open() rejects bad files.
+    const input = Object.assign(document.createElement('input'), { type: 'file' });
+    if (!isIOS()) input.accept = '.rbs,.json,application/json';
+    // Safari is more reliable with an input that's in the document.
+    input.hidden = true;
+    document.body.append(input);
+    const done = () => input.remove();
+    input.addEventListener('change', () => {
+      if (input.files[0]) this.open(input.files[0]);
+      done();
+    });
+    input.addEventListener('cancel', done);
     input.click();
   }
 

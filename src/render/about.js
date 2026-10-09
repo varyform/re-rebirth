@@ -1,7 +1,7 @@
 // "About" window, drawn over the rack like another piece of hardware.
 import pkg from '../../package.json' with { type: 'json' };
 import { hits } from '../ui/hits.js';
-import { click } from '../ui/handlers.js';
+import { click, release } from '../ui/handlers.js';
 import { drawLogo } from './logo.js';
 import { brushed, button, lcd, led, MONO, panel, screws, text, textWidth, vgrad } from './primitives.js';
 import { C } from './theme.js';
@@ -90,5 +90,5 @@ function drawSongsLink(ctx, x, y) {
   text(ctx, COPY.songsText, lx, y, linkOpts);
   ctx.fillStyle = C.delay;
   ctx.fillRect(lx, y + 4.5, lw, 0.7);
-  hits.rect(ctx, lx - 2, y - 6, lw + 4, 12, click(() => window.open(COPY.songsUrl, '_blank', 'noopener')));
+  hits.rect(ctx, lx - 2, y - 6, lw + 4, 12, release(() => window.open(COPY.songsUrl, '_blank', 'noopener')));
 }

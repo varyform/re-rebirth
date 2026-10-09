@@ -1,6 +1,6 @@
 import { songBars, TICKS_PER_BAR } from '../../song/song.js';
 import { hits } from '../../ui/hits.js';
-import { click, repeat } from '../../ui/handlers.js';
+import { click, release, repeat } from '../../ui/handlers.js';
 import { openAbout } from '../about.js';
 import { Knob } from '../controls.js';
 import { drawLogo, LOGO_W } from '../logo.js';
@@ -124,17 +124,18 @@ export class Transport {
     text(ctx, line2, SONG_X + 5, 34.5, { size: 5.5, family: MONO, align: 'left', color: notice ? C.lcdGreenOn : C.lcdGreenMid });
 
     const files = this.app.files;
+    // OPEN and SAVE open system UI, so they fire on release (see `release`).
     const buttons = [
-      ['NEW', () => files.newSong()],
-      ['OPEN', () => files.pick()],
-      ['SAVE', () => files.save()],
+      ['NEW', () => files.newSong(), click],
+      ['OPEN', () => files.pick(), release],
+      ['SAVE', () => files.save(), release],
     ];
-    buttons.forEach(([label, fn], i) => {
+    buttons.forEach(([label, fn, handler], i) => {
       const bx = SONG_X + i * 46;
       const key = `song.${label}`;
       const off = button(ctx, bx, 47, 42, 15, { pressed: hits.isPressed(key) });
       text(ctx, label, bx + 21, 55 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.6 });
-      hits.rect(ctx, bx, 47, 42, 15, click(fn, key));
+      hits.rect(ctx, bx, 47, 42, 15, handler(fn, key));
     });
     const lx = SONG_X + 3 * 46;
     const off = button(ctx, lx, 47, 42, 15, { pressed: t.loop, face: t.loop ? C.btnPressed : C.btnDark });

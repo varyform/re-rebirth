@@ -110,6 +110,11 @@ attachPointer(canvas, () => {
   files.autosave();
 });
 files.acceptDrops(window);
+// iOS only lets audio start inside a completed tap, and our buttons act on
+// pointerdown; resume a suspended engine when the finger lifts.
+canvas.addEventListener('pointerup', () => {
+  if (engine.ctx?.state === 'suspended') engine.ctx.resume();
+});
 window.addEventListener('resize', resize);
 watchPixelRatio();
 resize();

@@ -43,6 +43,17 @@ export function click(fn, key) {
 
 export const toggle = (state, param, key) => click(() => state.toggle(param), key);
 
+// Acts when the pointer is released instead of pressed. Needed for anything that
+// opens system UI (file picker, download, new tab): on touch screens browsers only
+// treat the release as a user gesture (pointerdown doesn't count on iOS).
+export function release(fn, key) {
+  return {
+    cursor: 'pointer',
+    key,
+    down: () => ({ up: fn }),
+  };
+}
+
 const REPEAT_DELAY = 400; // ms before a held button starts repeating
 const REPEAT_EVERY = 120; // ms between repeats
 // Repeats per tick by seconds held: speeds up the longer the button is down.
