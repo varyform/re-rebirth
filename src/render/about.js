@@ -3,11 +3,11 @@ import pkg from '../../package.json' with { type: 'json' };
 import { hits } from '../ui/hits.js';
 import { click } from '../ui/handlers.js';
 import { drawLogo } from './logo.js';
-import { brushed, button, lcd, led, MONO, panel, screws, text, vgrad } from './primitives.js';
+import { brushed, button, lcd, led, MONO, panel, screws, text, textWidth, vgrad } from './primitives.js';
 import { C } from './theme.js';
 
 const W = 380;
-const H = 236;
+const H = 252;
 const COPY = {
   title: 'ABOUT',
   author: 'OLEH KHOMEI',
@@ -20,6 +20,9 @@ const COPY = {
     'Opens ReBirth 2.0 songs using the standard sounds; songs that need a mod are refused.',
   ],
   keys: 'SPACE  PLAY / STOP       DROP .RBS / .JSON  OPEN       HOLD REW / FF  SEEK',
+  songsLabel: 'More songs:',
+  songsUrl: 'https://nordbeat.com/archive/rebirth/song_archives.htm',
+  songsText: 'nordbeat.com/archive/rebirth',
 };
 
 export function openAbout(state) {
@@ -64,14 +67,28 @@ export function drawAbout(ctx, rackW, rackH, state) {
   ctx.fillRect(18, 87, W - 36, 1);
 
   COPY.lines.forEach((line, i) => text(ctx, line, 24, 102 + i * 14, { size: 6.8, weight: 600, align: 'left', color: C.inkLight }));
+  drawSongsLink(ctx, 24, 172);
 
-  lcd(ctx, 18, 166, W - 36, 18, C.lcd);
-  text(ctx, COPY.keys, W / 2, 175.5, { size: 5.8, weight: 700, family: MONO, color: C.lcdOn });
+  lcd(ctx, 18, 182, W - 36, 18, C.lcd);
+  text(ctx, COPY.keys, W / 2, 191.5, { size: 5.8, weight: 700, family: MONO, color: C.lcdOn });
 
   const bw = 70;
   const bx = (W - bw) / 2;
-  const off = button(ctx, bx, 196, bw, 22, { pressed: hits.isPressed('about.close') });
-  text(ctx, 'CLOSE', W / 2, 207.5 + off, { size: 7, weight: 800, spacing: 1.2 });
-  hits.rect(ctx, bx, 196, bw, 22, click(() => closeAbout(state), 'about.close'));
+  const off = button(ctx, bx, 212, bw, 22, { pressed: hits.isPressed('about.close') });
+  text(ctx, 'CLOSE', W / 2, 223.5 + off, { size: 7, weight: 800, spacing: 1.2 });
+  hits.rect(ctx, bx, 212, bw, 22, click(() => closeAbout(state), 'about.close'));
   ctx.restore();
+}
+
+// "More songs:" plus an underlined link that opens the song archive in a new tab.
+function drawSongsLink(ctx, x, y) {
+  const labelOpts = { size: 6.8, weight: 600, align: 'left', color: C.inkMuted };
+  const linkOpts = { ...labelOpts, color: C.delay };
+  text(ctx, COPY.songsLabel, x, y, labelOpts);
+  const lx = x + textWidth(ctx, COPY.songsLabel, labelOpts) + 5;
+  const lw = textWidth(ctx, COPY.songsText, linkOpts);
+  text(ctx, COPY.songsText, lx, y, linkOpts);
+  ctx.fillStyle = C.delay;
+  ctx.fillRect(lx, y + 4.5, lw, 0.7);
+  hits.rect(ctx, lx - 2, y - 6, lw + 4, 12, click(() => window.open(COPY.songsUrl, '_blank', 'noopener')));
 }
