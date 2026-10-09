@@ -1,5 +1,5 @@
 // Synthesized drum voices (no samples). Each hit builds short-lived nodes that
-// stop themselves; the graph is garbage-collected afterwards.
+// stop themselves; playHit() then disconnects them so they can be collected.
 //
 // Voice signature: (v, P) where
 //   v = { ctx, out, noise, kit, t, acc }  (kit holds per-machine state like hat chokes)
@@ -49,6 +49,22 @@ function run(v, src, dur) {
   if (src.buffer) src.start(v.t, Math.random() * (src.buffer.duration - 0.1));
   else src.start(v.t);
   src.stop(v.t + dur);
+  if (v.t + dur >= v.end) {
+    v.end = v.t + dur;
+    v.last = src;
+  }
+}
+
+// Every hit plays through its own bus, disconnected once its last source ends.
+// Left connected, finished hits kept costing render time, which grew faster
+// than the song length (offline renders slowed down more and more).
+export function playHit(voice, v, P) {
+  const bus = v.ctx.createGain();
+  bus.connect(v.out);
+  const hit = { ...v, out: bus, end: 0, last: null };
+  voice(hit, P);
+  if (hit.last) hit.last.onended = () => bus.disconnect();
+  else bus.disconnect();
 }
 
 // Six detuned squares summed: the classic analog metallic source.

@@ -83,7 +83,13 @@ const makers = {
 };
 
 // One instance of each effect per channel, crossfaded in/out, so routing
-// changes (including automated ones) are click-free.
+// changes (including automated ones) are click-free. A distortion or pattern
+// filter that has been off for a while is disconnected from its input, so it
+// stops costing CPU (5 chains of mostly idle oversampled shapers otherwise run
+// all the time). Compressors stay connected: idling them audibly changed renders.
+const IDLE_AFTER = 1; // seconds; well past the crossfade and offline render slices
+const IDLES = new Set(['dist', 'pcf']);
+
 export class InsertChain {
   constructor(ctx, input, output) {
     this.stages = {};
@@ -95,12 +101,31 @@ export class InsertChain {
       const out = ctx.createGain();
       wet.gain.value = 0;
       node.connect(dry).connect(out);
-      node.connect(fx.in);
       fx.out.connect(wet).connect(out);
-      this.stages[key] = { fx, dry, wet };
+      const idles = IDLES.has(key);
+      if (!idles) node.connect(fx.in);
+      this.stages[key] = { fx, dry, wet, input: node, idles, connected: !idles, offAt: null };
       node = out;
     }
     node.connect(output);
+  }
+
+  // Call alongside the wet/dry crossfade, with the current audio time.
+  setActive(key, on, now) {
+    const stage = this.stages[key];
+    if (!stage.idles) return;
+    if (on) {
+      if (!stage.connected) stage.input.connect(stage.fx.in);
+      stage.connected = true;
+      stage.offAt = null;
+    } else if (stage.connected) {
+      stage.offAt ??= now;
+      if (now - stage.offAt > IDLE_AFTER) {
+        stage.input.disconnect(stage.fx.in);
+        stage.connected = false;
+        stage.offAt = null;
+      }
+    }
   }
 }
 

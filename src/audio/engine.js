@@ -9,7 +9,7 @@
 import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { BASS_IDS, DRUM_IDS, HIT } from '../state.js';
 import { BassVoice } from './bass-voice.js';
-import { KITS } from './drums.js';
+import { KITS, playHit } from './drums.js';
 import { createDelay, distMakeup, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
 import { PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
@@ -193,6 +193,7 @@ export class AudioEngine {
     for (const key of INSERTS) {
       for (const chain of chains) {
         const on = active[key].has(chain);
+        chain.setActive(key, on, this.ctx.currentTime);
         set(chain.stages[key].wet.gain, on ? 1 : 0, 0.01);
         set(chain.stages[key].dry.gain, on ? 0 : 1, 0.01);
       }
@@ -275,10 +276,10 @@ export class AudioEngine {
       const P = (k) => state.get(`${id}.${group}.${k}`);
       const v = { ctx: this.ctx, out: this.channels[id].input, noise: this.noise, kit: this.kits[id], t, acc: accent * stepAccent };
       if (id === 'r909' && hit === HIT.flam) {
-        voice({ ...v, acc: v.acc * 0.5 }, P);
+        playHit(voice, { ...v, acc: v.acc * 0.5 }, P);
         v.t += 0.006 + state.get('r909.ac.flam') * 0.03;
       }
-      voice(v, P);
+      playHit(voice, v, P);
     }
   }
 
