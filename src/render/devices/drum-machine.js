@@ -6,8 +6,15 @@ import { brushed, button, led, line, panel, rrect, screws, shade, text, textWidt
 import { C, KNOB, SELECTOR } from '../theme.js';
 
 const HEADER_H = 18;
-const BOTTOM_Y = 124;
+const BOTTOM_Y = 118;
 const STEP_X = 214;
+// Bottom section rows, relative to BOTTOM_Y.
+const TRACK_NAME_Y = BOTTOM_Y + 7;
+const STEP_LED_Y = BOTTOM_Y + 16;
+const STEP_BTN_Y = BOTTOM_Y + 23;
+const STEP_BTN_H = 22;
+const STEP_NUM_Y = BOTTOM_Y + 52;
+const GROUP_LINE_Y = BOTTOM_Y + 59;
 const GROUP_LABEL = { size: 6.3, weight: 800, spacing: 0.3 };
 
 export class DrumMachine {
@@ -16,7 +23,7 @@ export class DrumMachine {
     this.knobs = [];
     state.define(`${cfg.id}.on`, 1);
     this.groups = this.layoutGroups();
-    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: 136, w: 176, theme: cfg.selector, state });
+    this.selector = new PatternSelector({ id: cfg.id, x: 20, y: BOTTOM_Y + 11, w: 176, theme: cfg.selector, state });
   }
 
   // Spreads instrument groups across the panel; each group is a small knob grid.
@@ -139,7 +146,7 @@ export class DrumMachine {
     const playhead = state.transport.playing ? (state.transport.positions[cfg.id] ?? -1) : -1;
     const hint = cfg.id === 'r909' ? '   SHIFT-CLICK: ON / ACCENT / FLAM' : '';
 
-    text(ctx, `\u25B8 ${cfg.trackNames[dev.selected]}${hint}`, STEP_X + 3, 131, { size: 6.5, weight: 800, align: 'left', color: t.bottomInk, spacing: 0.6 });
+    text(ctx, `\u25B8 ${cfg.trackNames[dev.selected]}${hint}`, STEP_X + 3, TRACK_NAME_Y, { size: 6.5, weight: 800, align: 'left', color: t.bottomInk, spacing: 0.6 });
 
     for (let i = 0; i < 16; i++) {
       const cx = STEP_X + i * stepW + stepW / 2;
@@ -147,29 +154,29 @@ export class DrumMachine {
       const playing = playhead === i;
       const hit = track[i];
       if (i >= pattern.length) ctx.globalAlpha = 0.3;
-      led(ctx, cx, 141, 2.8, hit > 0 || playing, playing && !hit ? C.inkLight : t.led);
+      led(ctx, cx, STEP_LED_Y, 2.8, hit > 0 || playing, playing && !hit ? C.inkLight : t.led);
       // Second small LED marks the 909's per-step accent (yellow) or flam.
-      if (hit === HIT.accent) led(ctx, cx + 7, 141, 1.8, true, C.ledYellow);
-      if (hit === HIT.flam) led(ctx, cx + 7, 141, 1.8, true, t.led);
+      if (hit === HIT.accent) led(ctx, cx + 7, STEP_LED_Y, 1.8, true, C.ledYellow);
+      if (hit === HIT.flam) led(ctx, cx + 7, STEP_LED_Y, 1.8, true, t.led);
       const face = t.stepFaces[group];
-      const off = button(ctx, cx - bw / 2, 149, bw, 26, { face: [shade(face, 0.22), face, shade(face, -0.18)], pressed: playing, radius: 2.5 });
+      const off = button(ctx, cx - bw / 2, STEP_BTN_Y, bw, STEP_BTN_H, { face: [shade(face, 0.22), face, shade(face, -0.18)], pressed: playing, radius: 2.5 });
       if (playing) {
-        rrect(ctx, cx - bw / 2, 149 + off, bw, 26, 2.5);
+        rrect(ctx, cx - bw / 2, STEP_BTN_Y + off, bw, STEP_BTN_H, 2.5);
         ctx.fillStyle = 'rgba(255,255,255,0.25)';
         ctx.fill();
       }
-      text(ctx, String(i + 1), cx, 184, { size: 6.5, weight: 800, color: t.bottomInk });
+      text(ctx, String(i + 1), cx, STEP_NUM_Y, { size: 6.5, weight: 800, color: t.bottomInk });
       ctx.globalAlpha = 1;
     }
 
-    hits.rect(ctx, STEP_X, 134, 16 * stepW, 44, this.stepHandler(track, stepW));
+    hits.rect(ctx, STEP_X, STEP_LED_Y - 7, 16 * stepW, STEP_BTN_Y + STEP_BTN_H - STEP_LED_Y + 7, this.stepHandler(track, stepW));
 
     ctx.lineWidth = 1.2;
     for (let g = 0; g < 4; g++) {
       const x0 = STEP_X + g * 4 * stepW + 3;
       const x1 = STEP_X + (g * 4 + 4) * stepW - 3;
       ctx.strokeStyle = t.groupLine[g % t.groupLine.length];
-      line(ctx, x0, 192, x1, 192);
+      line(ctx, x0, GROUP_LINE_Y, x1, GROUP_LINE_Y);
     }
   }
 
@@ -216,7 +223,7 @@ export const R808 = {
     groupLine: C.r808Steps,
     brushed: 0.15,
   },
-  layout: { cols: 1, cellW: 50, rowH: 28, r: 8.5, top: 46 },
+  layout: { cols: 1, cellW: 50, rowH: 26, r: 8.5, top: 45 },
   groups: [
     { id: 'bd', label: 'BASS DRUM', tracks: ['bd'], knobs: [['level', 'LEVEL', 0.8], ['tone', 'TONE', 0.5], ['decay', 'DECAY', 0.6]] },
     { id: 'sd', label: 'SNARE DRUM', tracks: ['sd'], knobs: [['level', 'LEVEL', 0.7], ['tone', 'TONE', 0.5], ['snappy', 'SNAPPY', 0.6]] },
@@ -262,7 +269,7 @@ export const R909 = {
     groupLine: ['#ef6a1d', '#8e8f8a'],
     brushed: 0.55,
   },
-  layout: { cols: 2, cellW: 32, rowH: 40, r: 10, top: 52 },
+  layout: { cols: 2, cellW: 32, rowH: 36, r: 10, top: 50 },
   groups: [
     { id: 'bd', label: 'BASS DRUM', tracks: ['bd'], knobs: [['tune', 'TUNE', 0.5], ['level', 'LEVEL', 0.8], ['attack', 'ATTACK', 0.4], ['decay', 'DECAY', 0.6]] },
     { id: 'sd', label: 'SNARE DRUM', tracks: ['sd'], knobs: [['tune', 'TUNE', 0.5], ['tone', 'TONE', 0.5], ['snappy', 'SNAPPY', 0.6], ['level', 'LEVEL', 0.7]] },

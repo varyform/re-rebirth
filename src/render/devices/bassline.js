@@ -17,16 +17,21 @@ const KNOBS = [
 ];
 
 const HEADER_H = 18;
-const SEQ_Y = 98;
+const KNOB_Y = 58;
+const SEQ_Y = 86;
 const GRID_X = 338;
 const STEP_W = 26;
-const ROW = { note: 111, oct: 127, acc: 138, slide: 149, pad: 157 };
-const KEYBOARD = [18, 108, 168, 58];
+// Sequencer rows. The note cell spans NOTE_TOP..+14; the selected-step frame covers all rows.
+const NOTE_TOP = SEQ_Y + 4;
+const ROW = { note: NOTE_TOP + 7, oct: SEQ_Y + 26, acc: SEQ_Y + 36, slide: SEQ_Y + 46, pad: SEQ_Y + 54 };
+const GRID_BOTTOM = ROW.pad + 17;
+const KEYBOARD = [18, SEQ_Y + 8, 168, 54];
+const EDIT_ROWS = [SEQ_Y + 9, SEQ_Y + 38];
 const EDIT_BUTTONS = [
-  ['DOWN', 198, 110, (s) => s.octave < 0, (s) => (s.octave = s.octave < 0 ? 0 : -1)],
-  ['UP', 252, 110, (s) => s.octave > 0, (s) => (s.octave = s.octave > 0 ? 0 : 1)],
-  ['ACCENT', 198, 140, (s) => s.accent, (s) => (s.accent = !s.accent)],
-  ['SLIDE', 252, 140, (s) => s.slide, (s) => (s.slide = !s.slide)],
+  ['DOWN', 198, EDIT_ROWS[0], (s) => s.octave < 0, (s) => (s.octave = s.octave < 0 ? 0 : -1)],
+  ['UP', 252, EDIT_ROWS[0], (s) => s.octave > 0, (s) => (s.octave = s.octave > 0 ? 0 : 1)],
+  ['ACCENT', 198, EDIT_ROWS[1], (s) => s.accent, (s) => (s.accent = !s.accent)],
+  ['SLIDE', 252, EDIT_ROWS[1], (s) => s.slide, (s) => (s.slide = !s.slide)],
 ];
 const NEXT_OCTAVE = { 0: 1, 1: -1, '-1': 0 };
 
@@ -40,9 +45,9 @@ export class Bassline {
     state.define(this.onParam, 1);
     this.knobs = KNOBS.map(([k, label, def], i) => {
       state.define(P(k), def);
-      return new Knob({ x: 102 + i * 60, y: 62, r: 15, param: P(k), label, labelPos: 'above', style: KNOB.bass, labelColor: C.bassInk, labelSize: 6.5 });
+      return new Knob({ x: 102 + i * 60, y: KNOB_Y, r: 15, param: P(k), label, labelPos: 'above', style: KNOB.bass, labelColor: C.bassInk, labelSize: 6.5 });
     });
-    this.selector = new PatternSelector({ id, x: 516, y: 32, w: 236, theme: SELECTOR.bass, state });
+    this.selector = new PatternSelector({ id, x: 516, y: KNOB_Y - 30, w: 236, theme: SELECTOR.bass, state });
   }
 
   draw(ctx) {
@@ -56,7 +61,7 @@ export class Bassline {
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     ctx.fillRect(0, SEQ_Y, w, 1);
 
-    this.drawWaveSwitch(ctx, 46, 58);
+    this.drawWaveSwitch(ctx, 46, KNOB_Y - 4);
     for (const k of this.knobs) k.draw(ctx, state);
     this.selector.draw(ctx);
     this.drawSequencer(ctx);
@@ -84,7 +89,7 @@ export class Bassline {
 
   drawWaveSwitch(ctx, cx, cy) {
     const square = this.state.get(this.waveParam) >= 0.5;
-    text(ctx, 'WAVEFORM', cx, 34, { size: 6.5, color: C.bassInk });
+    text(ctx, 'WAVEFORM', cx, cy - 24, { size: 6.5, color: C.bassInk });
     rrect(ctx, cx - 17, cy - 7.5, 34, 15, 7.5);
     ctx.fillStyle = vgrad(ctx, cy - 7.5, cy + 7.5, ['#0b0b0c', '#2a2b2e']);
     ctx.fill();
@@ -143,7 +148,7 @@ export class Bassline {
     ctx.lineWidth = 1;
     for (let g = 1; g < 4; g++) {
       const gx = GRID_X + g * 4 * STEP_W;
-      line(ctx, gx, 103, gx, 172);
+      line(ctx, gx, NOTE_TOP - 1, gx, GRID_BOTTOM);
     }
 
     const t = state.transport;
@@ -153,7 +158,7 @@ export class Bassline {
       // Steps past the pattern length don't play: dim them.
       if (i >= pattern.length) ctx.globalAlpha = 0.3;
       if (i === dev.selectedStep) {
-        rrect(ctx, cx - 12.5, 101.5, 25, 73, 2.5);
+        rrect(ctx, cx - 12.5, NOTE_TOP - 2.5, 25, GRID_BOTTOM - NOTE_TOP + 4.5, 2.5);
         ctx.fillStyle = 'rgba(255,106,26,0.12)';
         ctx.fill();
         ctx.strokeStyle = 'rgba(255,106,26,0.7)';
@@ -161,7 +166,7 @@ export class Bassline {
         ctx.stroke();
       }
 
-      rrect(ctx, cx - 11, 104, 22, 14, 1.5);
+      rrect(ctx, cx - 11, NOTE_TOP, 22, 14, 1.5);
       ctx.fillStyle = C.bassCell;
       ctx.fill();
       const noteColor = !s.gate ? C.bassNoteOff : s.accent ? C.bassNoteAccent : C.bassNote;
@@ -197,7 +202,7 @@ export class Bassline {
     };
     const flag = (name) => ({ ...row, get: (i) => pattern[i][name], set: (i, v) => (pattern[i][name] = v) });
     const gate = { ...row, get: (i) => pattern[i].gate && !pattern[i].tie, set: (i, v) => Object.assign(pattern[i], { gate: v, tie: false }) };
-    hits.rect(ctx, GRID_X, 103, width, 16, paintSteps({ ...gate, after: select }));
+    hits.rect(ctx, GRID_X, NOTE_TOP - 1, width, 16, paintSteps({ ...gate, after: select }));
     hits.rect(
       ctx,
       GRID_X,
@@ -209,8 +214,8 @@ export class Bassline {
         if (pattern[i]) pattern[i].octave = NEXT_OCTAVE[pattern[i].octave];
       }),
     );
-    hits.rect(ctx, GRID_X, ROW.acc - 5.5, width, 11, paintSteps(flag('accent')));
-    hits.rect(ctx, GRID_X, ROW.slide - 5.5, width, 11, paintSteps(flag('slide')));
+    hits.rect(ctx, GRID_X, ROW.acc - 5, width, 10, paintSteps(flag('accent')));
+    hits.rect(ctx, GRID_X, ROW.slide - 5, width, 10, paintSteps(flag('slide')));
     hits.rect(ctx, GRID_X, ROW.pad, width, 15, scrubSteps({ ...row, pick: selectAndHear }));
   }
 }

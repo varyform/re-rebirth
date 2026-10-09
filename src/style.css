@@ -1,10 +1,13 @@
 @layer reset, base;
 
 @layer reset {
+
   html,
   body {
     margin: 0;
     padding: 0;
+    /* No elastic overscroll bounce: the rack should feel like an app, not a page. */
+    overscroll-behavior: none;
   }
 }
 

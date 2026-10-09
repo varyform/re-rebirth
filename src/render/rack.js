@@ -6,7 +6,10 @@ import { hgrad, line, rrect } from './primitives.js';
 import { C } from './theme.js';
 
 const RAIL_W = 14;
-const MARGIN = 6;
+const MARGIN = 4;
+const TRANSPORT_H = 72;
+const BASS_H = 162;
+const DRUM_H = 188;
 const GAP = 3;
 const INSTRUMENT_W = 772;
 const EFFECTS_W = 300;
@@ -22,16 +25,16 @@ export class Rack {
     const x = RAIL_W;
     let y = MARGIN;
 
-    this.devices.push(new Transport(state, app, x, y, RACK_W - RAIL_W * 2, 80));
-    y += 80 + GAP;
+    this.devices.push(new Transport(state, app, x, y, RACK_W - RAIL_W * 2, TRANSPORT_H));
+    y += TRANSPORT_H + GAP;
 
     const top = y;
     const bands = [];
     const instruments = [
-      [(...r) => new Bassline(state, app, ...r, { id: 'bass1', number: 1 }), 176],
-      [(...r) => new Bassline(state, app, ...r, { id: 'bass2', number: 2 }), 176],
-      [(...r) => new DrumMachine(state, app, ...r, R808), 206],
-      [(...r) => new DrumMachine(state, app, ...r, R909), 206],
+      [(...r) => new Bassline(state, app, ...r, { id: 'bass1', number: 1 }), BASS_H],
+      [(...r) => new Bassline(state, app, ...r, { id: 'bass2', number: 2 }), BASS_H],
+      [(...r) => new DrumMachine(state, app, ...r, R808), DRUM_H],
+      [(...r) => new DrumMachine(state, app, ...r, R909), DRUM_H],
     ];
     for (const [make, h] of instruments) {
       this.devices.push(make(x, y, INSTRUMENT_W, h));
