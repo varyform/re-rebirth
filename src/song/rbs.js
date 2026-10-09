@@ -10,11 +10,13 @@ import { TICKS_PER_BAR } from './song.js';
 const GLOB_TICKS_PER_BAR = 768;
 export const STANDARD_MOD = 'Standard ReBirth';
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent']; // then waveform
+// `.alt`: the voice switches (LT/LC, MT/MC, HT/HC, RS/CL, CP/MA). Stored 0 selects the
+// alternate voice: measured on a ReBirth test song that flips each switch.
 const R808_KNOBS = [
   'ac.level', 'bd.level', 'bd.tone', 'bd.decay', 'sd.level', 'sd.tone', 'sd.snappy',
-  'lt.level', 'lt.tuning', null, 'mt.level', 'mt.tuning', null, 'ht.level', 'ht.tuning', null,
-  'rs.level', null, 'cp.level', null, 'cb.level', 'cy.level', 'cy.tone', 'cy.decay', 'oh.level', 'oh.decay', 'ch.level',
-]; // nulls: alternate-voice selectors (conga/claves/maracas), not modelled
+  'lt.level', 'lt.tuning', 'lt.alt', 'mt.level', 'mt.tuning', 'mt.alt', 'ht.level', 'ht.tuning', 'ht.alt',
+  'rs.level', 'rs.alt', 'cp.level', 'cp.alt', 'cb.level', 'cy.level', 'cy.tone', 'cy.decay', 'oh.level', 'oh.decay', 'ch.level',
+];
 const R909_KNOBS = [
   'ac.level', 'bd.level', 'bd.tune', 'bd.attack', 'bd.decay', 'sd.level', 'sd.tune', 'sd.tone', 'sd.snappy',
   'lt.level', 'lt.tune', 'lt.decay', 'mt.level', 'mt.tune', 'mt.decay', 'ht.level', 'ht.tune', 'ht.decay',
@@ -28,6 +30,7 @@ const DELAY_STEPS = 32;
 const PCF_WAVES = 56;
 
 const knob = (v) => Math.min(1, v / 127);
+const drumValue = (key, v) => (key.endsWith('.alt') ? (v ? 0 : 1) : knob(v));
 const choice = (i, n) => Math.min(n - 1, Math.max(0, i)) / (n - 1);
 
 class Reader {
@@ -225,7 +228,7 @@ function readBass(r, c, id, P) {
 function readDrums(r, c, id, knobs, tracks, P) {
   const o = c.at;
   P[`${id}.on`] = r.u8(o) ? 1 : 0;
-  knobs.forEach((key, i) => key && (P[`${id}.${key}`] = knob(r.u8(o + 2 + i))));
+  knobs.forEach((key, i) => key && (P[`${id}.${key}`] = drumValue(key, r.u8(o + 2 + i))));
   const head = 2 + knobs.length + 1;
   const stride = 2 + STEPS * tracks.length;
   const patterns = Array.from({ length: PATTERN_COUNT }, (_, p) => {
@@ -270,7 +273,7 @@ const deviceKey = (id, knobs) => (cid, v) => {
   if (cid === 0) return [`${id}.on`, v ? 1 : 0];
   if (cid === 1) return ['pattern', Math.min(PATTERN_COUNT - 1, v)];
   const k = knobs[cid - 2];
-  return k ? [`${id}.${k}`, knob(v)] : null;
+  return k ? [`${id}.${k}`, drumValue(k, v)] : null;
 };
 const bassKey = (id) => (cid, v) => (cid === 8 ? [`${id}.waveform`, v ? 1 : 0] : deviceKey(id, BASS_KNOBS)(cid, v));
 const FX_KEYS = [

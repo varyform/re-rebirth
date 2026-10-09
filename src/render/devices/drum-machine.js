@@ -66,6 +66,7 @@ export class DrumMachine {
     const total = widths.reduce((a, b) => a + b, 0);
     const gap = (w - 36 - total) / (cfg.groups.length - 1);
     let gx = 18;
+    this.switches = [];
     return cfg.groups.map((g, gi) => {
       const cols = Math.min(L.cols, g.knobs.length);
       g.knobs.forEach(([key, label, def], i) => {
@@ -88,6 +89,13 @@ export class DrumMachine {
           }),
         );
       });
+      // Voice switch (808 LT/LC etc.) in the next free knob row.
+      if (g.alt) {
+        const param = `${cfg.id}.${g.id}.alt`;
+        state.define(param, 0);
+        const row = Math.ceil(g.knobs.length / cols);
+        this.switches.push({ x: gx + widths[gi] / 2, y: this.V.knobTop(L.top) + row * this.V.knobRowH(L.rowH) - 4, param, labels: g.alt });
+      }
       const out = { ...g, x: gx, w: widths[gi] };
       gx += widths[gi] + gap;
       return out;
@@ -130,10 +138,32 @@ export class DrumMachine {
     } else {
       this.drawGroups(ctx);
       for (const k of this.knobs) k.draw(ctx, state);
+      for (const s of this.switches) this.drawSwitch(ctx, s);
       this.drawSteps(ctx);
     }
     this.selector.draw(ctx);
     screws(ctx, w, h);
+  }
+
+  // Two-position voice switch: the lit half is the voice that plays.
+  drawSwitch(ctx, { x, y, param, labels }) {
+    const { state, cfg } = this;
+    const t = cfg.theme;
+    const on = state.on01(param) ? 1 : 0;
+    const hw = 15;
+    const h = 11;
+    const x0 = x - hw;
+    rrect(ctx, x0 - 1, y - 1, hw * 2 + 2, h + 2, 2.5);
+    ctx.fillStyle = 'rgba(0,0,0,0.55)';
+    ctx.fill();
+    labels.forEach((label, i) => {
+      const lit = i === on;
+      rrect(ctx, x0 + i * hw, y, hw, h, 2);
+      ctx.fillStyle = lit ? t.selBg : 'rgba(255,255,255,0.08)';
+      ctx.fill();
+      text(ctx, label, x0 + i * hw + hw / 2, y + h / 2 + 0.5, { size: 5.6, weight: 800, color: lit ? t.selInk : t.ink });
+    });
+    hits.rect(ctx, x0, y, hw * 2, h, click(() => state.toggle(param)));
   }
 
   drawHeader(ctx) {
@@ -252,7 +282,12 @@ export class DrumMachine {
     ctx.fillStyle = t.selBg;
     ctx.fill();
     text(ctx, name, cx, 27.5, { ...GROUP_LABEL, color: t.selInk });
-    for (const k of this.gridKnobs[group.id]) k.draw(ctx, state);
+    const knobs = this.gridKnobs[group.id];
+    for (const k of knobs) k.draw(ctx, state);
+    if (group.alt) {
+      const last = knobs.at(-1);
+      this.drawSwitch(ctx, { x: last.x + cfg.layout.r + 24, y: last.y - 5.5, param: `${cfg.id}.${group.id}.alt`, labels: group.alt });
+    }
     text(ctx, GRID_HINT[cfg.id], cx, this.V.bottomY - 7, { size: 5, weight: 700, color: t.ink, spacing: 0.4 });
   }
 
@@ -427,11 +462,11 @@ export const R808 = {
   groups: [
     { id: 'bd', label: 'BASS DRUM', tracks: ['bd'], knobs: [['level', 'LEVEL', 0.8], ['tone', 'TONE', 0.5], ['decay', 'DECAY', 0.6]] },
     { id: 'sd', label: 'SNARE DRUM', tracks: ['sd'], knobs: [['level', 'LEVEL', 0.7], ['tone', 'TONE', 0.5], ['snappy', 'SNAPPY', 0.6]] },
-    { id: 'lt', label: 'LOW TOM', tracks: ['lt'], knobs: [['level', 'LEVEL', 0.6], ['tuning', 'TUNING', 0.5]] },
-    { id: 'mt', label: 'MID TOM', tracks: ['mt'], knobs: [['level', 'LEVEL', 0.6], ['tuning', 'TUNING', 0.5]] },
-    { id: 'ht', label: 'HI TOM', tracks: ['ht'], knobs: [['level', 'LEVEL', 0.6], ['tuning', 'TUNING', 0.5]] },
-    { id: 'rs', label: 'RIM SHOT', tracks: ['rs'], knobs: [['level', 'LEVEL', 0.6]] },
-    { id: 'cp', label: 'HAND CLAP', tracks: ['cp'], knobs: [['level', 'LEVEL', 0.7]] },
+    { id: 'lt', label: 'LOW TOM', tracks: ['lt'], knobs: [['level', 'LEVEL', 0.6], ['tuning', 'TUNING', 0.5]], alt: ['LT', 'LC'] },
+    { id: 'mt', label: 'MID TOM', tracks: ['mt'], knobs: [['level', 'LEVEL', 0.6], ['tuning', 'TUNING', 0.5]], alt: ['MT', 'MC'] },
+    { id: 'ht', label: 'HI TOM', tracks: ['ht'], knobs: [['level', 'LEVEL', 0.6], ['tuning', 'TUNING', 0.5]], alt: ['HT', 'HC'] },
+    { id: 'rs', label: 'RIM SHOT', tracks: ['rs'], knobs: [['level', 'LEVEL', 0.6]], alt: ['RS', 'CL'] },
+    { id: 'cp', label: 'HAND CLAP', tracks: ['cp'], knobs: [['level', 'LEVEL', 0.7]], alt: ['CP', 'MA'] },
     { id: 'cb', label: 'COW BELL', tracks: ['cb'], knobs: [['level', 'LEVEL', 0.5]] },
     { id: 'cy', label: 'CYMBAL', tracks: ['cy'], knobs: [['level', 'LEVEL', 0.5], ['tone', 'TONE', 0.5], ['decay', 'DECAY', 0.6]] },
     { id: 'oh', label: 'OPEN HAT', tracks: ['oh'], knobs: [['level', 'LEVEL', 0.6], ['decay', 'DECAY', 0.4]] },

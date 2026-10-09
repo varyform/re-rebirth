@@ -18,7 +18,11 @@ export const DELAY_STEPS = 32;
 const MAX_SWING = 0.42; // fraction of a step that off-beats move at full shuffle
 const METER_RANGE_DB = 48;
 const MAX_FILTER_HZ = 14000;
-const PAN_WIDTH = 0.5;
+// Pan knob offset -> equal-power pan position, clamped at the ends. Fitted to
+// ReBirth's per-channel exports (808 at pan 0.22 / 0.28 / 0.63 / 0.71: right minus
+// left -14.5 / -7.9 / +4.0 / +7.9 dB) and a test song panned hard left (no leak).
+const PAN_WIDTH = 1.2;
+const panPos = (knob) => Math.max(-1, Math.min(1, (knob - 0.5) * 2 * PAN_WIDTH));
 // 909 per-step accent ("double power"): measured +3.3..+4.2 dB on the same voice.
 const STEP_ACCENT = 1.55;
 // Accent-track depth per accent-level knob. The 909's is strong: at level 32/127
@@ -159,7 +163,7 @@ export class AudioEngine {
     const anySolo = CHANNELS.some(([id]) => state.on01(`mixer.${id}.solo`));
     for (const [id, ch] of Object.entries(this.channels)) {
       // Measured against ReBirth: its pan law is a little gentler than equal-power at full width.
-      set(ch.pan.pan, (g(`mixer.${id}.pan`) - 0.5) * 2 * PAN_WIDTH);
+      set(ch.pan.pan, panPos(g(`mixer.${id}.pan`)));
       set(ch.fader.gain, faderGain(g(`mixer.${id}.level`)));
       set(ch.send.gain, g(`mixer.${id}.delay`) ** 2);
       const audible = state.on01(`${id}.on`) && !state.on01(`mixer.${id}.mute`) && (!anySolo || state.on01(`mixer.${id}.solo`));
@@ -174,7 +178,7 @@ export class AudioEngine {
     const unit = this.stepDuration() * (state.on01('fx.delay.triplet') ? 2 / 3 : 1);
     set(d.delay.delayTime, Math.min(11.9, steps * unit), 0.05);
     set(d.feedback.gain, g('fx.delay.feedback') * 0.85);
-    set(d.pan.pan, (g('fx.delay.pan') - 0.5) * 2 * PAN_WIDTH);
+    set(d.pan.pan, panPos(g('fx.delay.pan')));
     set(this.delayReturn.gain, g('mixer.delayReturn') * 1.2);
 
     this.syncInserts();
