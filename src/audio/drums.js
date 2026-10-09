@@ -63,11 +63,17 @@ function metal(v, scale, dur) {
   return sum;
 }
 
-function kick(v, { base, sweep, sweepTime, decay, level, click, clickHz = 3500 }) {
-  const o = osc(v, 'sine', base * sweep);
-  o.frequency.exponentialRampToValueAtTime(base, v.t + sweepTime);
-  chain(o, env(v, level, decay, 0.001), v.out);
-  run(v, o, decay + 0.05);
+// Pitch falls from base * sweep to base, either reaching it at sweepTime or, with
+// `settle` (time constant), approaching it gradually.
+// harm: level of a second harmonic that follows the same sweep.
+function kick(v, { base, sweep, sweepTime, settle, decay, level, click, clickHz = 3500, harm = 0 }) {
+  for (const [mul, gain] of harm ? [[1, 1], [2, harm]] : [[1, 1]]) {
+    const o = osc(v, 'sine', base * sweep * mul);
+    if (settle) o.frequency.setTargetAtTime(base * mul, v.t, settle);
+    else o.frequency.exponentialRampToValueAtTime(base * mul, v.t + sweepTime);
+    chain(o, env(v, level * gain, decay, 0.001), v.out);
+    run(v, o, decay + 0.05);
+  }
   if (click > 0) {
     const n = noise(v);
     chain(n, filter(v, 'lowpass', clickHz), env(v, level * click, 0.012, 0.0005), v.out);
@@ -122,7 +128,7 @@ function ring(v, { partials, decay, level, tick = 0, tickHz = 2500 }) {
 }
 
 // Several rapid noise bursts then a diffuse tail.
-function clap(v, level, hz, tail, q = 1.6) {
+function clap(v, level, hz, tail, q = 1.6, tailLevel = 0.8) {
   const n = noise(v);
   const g = v.ctx.createGain();
   const p = g.gain;
@@ -132,7 +138,7 @@ function clap(v, level, hz, tail, q = 1.6) {
     p.setValueAtTime(level, at);
     p.setTargetAtTime(0, at + 0.001, 0.0035);
   }
-  p.setValueAtTime(level * 0.8, v.t + 0.033);
+  p.setValueAtTime(level * tailLevel, v.t + 0.033);
   p.setTargetAtTime(0, v.t + 0.034, tail * T60);
   chain(n, filter(v, 'bandpass', hz, q), filter(v, 'highpass', 600), g, v.out);
   run(v, n, 0.04 + tail);
@@ -179,8 +185,9 @@ function cymbal(v, { level, decay, scale, hp, bp, noiseMix }) {
 
 // 808 voices fitted to a ReBirth test recording (knobs at centre unless noted).
 const R808 = {
-  // ~57 Hz, -20 dB after ~170 ms at decay 64.
-  bd: ['bd', (v, P) => kick(v, { base: 50 + P('tone') * 6, sweep: 1.5, sweepTime: 0.03, decay: 0.15 + P('decay') * 0.75, level: lvl(P('level')) * v.acc * 1.4, click: P('tone') * 0.35 })],
+  // ~57 Hz, -20 dB after ~170 ms at decay 64. Even at full tone the click is faint
+  // (ReBirth's channel export of a song: little above 400 Hz).
+  bd: ['bd', (v, P) => kick(v, { base: 50 + P('tone') * 6, sweep: 1.5, sweepTime: 0.03, decay: 0.15 + P('decay') * 0.75, level: lvl(P('level')) * v.acc * 1.4, click: P('tone') * 0.1 })],
   sd: ['sd', (v, P) => snare(v, { tones: [185, 330], toneDecay: 0.12, toneLevel: lvl(P('level')) * v.acc * 1.27 * (1.2 - P('tone') * 0.5), noiseHp: 1800, noiseLp: 6000 + P('tone') * 6000, noiseDecay: 0.18, noiseLevel: lvl(P('level')) * v.acc * P('snappy') })],
   // Toms measured on isolated hits in a ReBirth recording: ~194/280/388 Hz at
   // tuning ~0.56, with almost no pitch sweep.
@@ -211,9 +218,12 @@ const R808 = {
 // (one or two hits per step, effects off).
 const R909 = {
   // ~86 Hz average in the first 80 ms at tune 64, -20 dB after ~290 ms at max decay.
-  // Tune has a small range: at tune 127 the pitch still settles near 50 Hz within
-  // ~80 ms. Decay (-60 dB) fitted between ~1.1 s at 127 and ~0.7 s at 65.
-  bd: ['bd', (v, P) => kick(v, { base: 56, sweep: 1.8 + P('tune') * 0.6, sweepTime: 0.06 + P('tune') * 0.02, decay: 0.25 + P('decay') * 0.85, level: lvl(P('level')) * v.acc * 0.75, click: 0.7 + P('attack') * 0.8, clickHz: 7000 })],
+  // Tune sets the start of the pitch sweep (~120 Hz at 64, ~280 Hz at 127; at 127
+  // ~112 Hz average over 20-60 ms and ~67 Hz over 60-120 ms, per ReBirth's channel
+  // export of a song), settling on 56 Hz. A weak second harmonic carries the tail
+  // in the 100-200 Hz band. Decay (-60 dB) fitted between ~1.1 s at 127 and ~0.7 s
+  // at 65. Attack 0 has no audible click.
+  bd: ['bd', (v, P) => kick(v, { base: 56, sweep: 1 + 1.1 * 3.6 ** (2 * P('tune') - 1), settle: 0.076 - P('tune') * 0.052, decay: 0.25 + P('decay') * 0.85, level: lvl(P('level')) * v.acc * 0.75, click: 1.5 * P('attack') ** 0.45, clickHz: 7000, harm: 0.07 })],
   // Body around 186 Hz dominates; the noise sits ~7 dB under it.
   sd: ['sd', (v, P) => {
     const k = 0.8 + P('tune') * 0.6;
@@ -225,8 +235,9 @@ const R909 = {
   ht: ['ht', (v, P) => tom(v, { hz: 140 * (0.8 + P('tune') * 0.5), decay: 0.12 * (0.3 + P('decay') * 0.7), level: lvl(P('level')) * v.acc * 2, sweep: 1.2, sweepTime: 0.04 })],
   // Rimshot: low body peaking ~113 Hz, -20 dB after ~40 ms.
   rs: ['rs', (v, P) => ring(v, { partials: [[113, 1], [330, 0.35], [900, 0.12], [1700, 0.06]], decay: 0.12, level: lvl(P('level')) * v.acc * 1.4, tick: 0.12 })],
-  // Clap centred near 900 Hz, little below 600 Hz.
-  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 6.5, 1100, 0.28, 1.3)],
+  // Clap centred near 900 Hz, little below 600 Hz. The tail sits ~14 dB under the
+  // bursts (ReBirth's channel export of a song).
+  cp: ['cp', (v, P) => clap(v, lvl(P('level')) * v.acc * 6.5, 1100, 0.35, 1.3, 0.2)],
   // The 909's sampled hats are broadband (flat ~4-13 kHz in ReBirth recordings):
   // mostly high-passed noise with a lighter metallic layer.
   ch: ['hh', (v, P) => hat(v, { level: lvl(P('level')) * v.acc * 0.7, decay: 0.03 + P('chDecay') * 0.15, scale: 1.3, hp: 2400, noiseMix: 1, metalMix: 0.35, choke: true })],
