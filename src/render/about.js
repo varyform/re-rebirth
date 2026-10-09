@@ -17,6 +17,7 @@ const COPY = {
     'Independent project: not affiliated with or endorsed by Reason Studios.',
     'All sounds are synthesized in the browser with the Web Audio API.',
     'Song file format from publicly shared reverse-engineering notes.',
+    'Opens ReBirth 2.0 songs using the standard sounds; songs that need a mod are refused.',
   ],
   keys: 'SPACE  PLAY / STOP       DROP .RBS / .JSON  OPEN       HOLD REW / FF  SEEK',
 };

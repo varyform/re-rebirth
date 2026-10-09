@@ -21,7 +21,8 @@ const files = new Files(state, {
   },
   onError: (err, file) => {
     console.error(err);
-    notify(`Can't open ${file?.name ?? 'file'}: ${err.message}`);
+    // The song display fits ~50 characters: show the reason, not the file name.
+    notify(`Can't open: ${err.message}`);
   },
 });
 const app = { clock, engine, files };

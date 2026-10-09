@@ -8,6 +8,7 @@ import { emptyBassPattern, emptyDrumPattern, PATTERN_COUNT, STEPS } from '../sta
 import { TICKS_PER_BAR } from './song.js';
 
 const GLOB_TICKS_PER_BAR = 768;
+export const STANDARD_MOD = 'Standard ReBirth';
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent']; // then waveform
 const R808_KNOBS = [
   'ac.level', 'bd.level', 'bd.tone', 'bd.decay', 'sd.level', 'sd.tone', 'sd.snappy',
@@ -85,6 +86,9 @@ export function parseRbs(buffer, fileName = '') {
   const devl = find(top, 'CAT ', 'DEVL');
   const trkl = find(top, 'CAT ', 'TRKL');
   if (!glob || !devl) throw new Error('Song is missing its GLOB or DEVL section');
+  // Mods swap in their own samples and graphics, which we can't reproduce.
+  const mod = r.zstr(glob.at + 15, 65);
+  if (mod !== STANDARD_MOD) throw new Error(`unsupported mod "${mod}"`);
 
   const session = {
     format: 're-rebirth',
@@ -123,7 +127,8 @@ export function parseRbs(buffer, fileName = '') {
   if (r808) session.drums.r808 = readDrums(r, r808, 'r808', R808_KNOBS, R808_TRACKS, P);
   if (r909) session.drums.r909 = readDrums(r, r909, 'r909', R909_KNOBS, R909_TRACKS, P);
 
-  // HEAD byte 6: 0 for ReBirth 2.0 files, 2 for 2.0.1; they number mixer controllers differently.
+  // HEAD byte 6: 0 for the earliest 2.0 files; 1 and 2 (later 2.0 / 2.0.1) number the
+  // mixer controllers differently. Verified on songs of each kind.
   const head = find(top, 'HEAD');
   const version = head ? r.u8(head.at + 6) : 0;
   if (trkl) readTracks(r, trkl.children.filter((c) => c.id === 'TRAK'), session.song, version);
@@ -298,10 +303,10 @@ function readTracks(r, traks, song, version) {
       return convert(events, (cid, v) => (names?.[cid] ? [`${prefix}.${names[cid]}`, fxValue(`${prefix}.${names[cid]}`, v)] : null));
     })
     .sort((a, b) => a.tick - b.tick);
-  song.tracks.mixer = version >= 2 ? convertMixer201(mixer ?? []) : convertMixer(mixer ?? []);
+  song.tracks.mixer = version >= 1 ? convertMixer201(mixer ?? []) : convertMixer(mixer ?? []);
 }
 
-// ReBirth 2.0.1 mixer controllers: 1 compressor device, 2 PCF device
+// Later ReBirth 2.0 / 2.0.1 mixer controllers: 1 compressor device, 2 PCF device
 // (0 off, 1 master, 2..5 channels), then per channel k ids 6+6k+n:
 // n=0 level, 1 pan, 2 delay send, 3 distortion on.
 function convertMixer201(events) {
