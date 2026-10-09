@@ -31,7 +31,7 @@ const AC_DEPTH = { r808: 0.8, r909: 6 };
 //    changes how hard distortion / compressor are driven.
 //  CHANNEL_TRIM_DB: after the effects, before pan and fader; a plain volume offset.
 const INPUT_GAIN = { bass1: 1, bass2: 1, r808: 0.55, r909: 0.55 };
-export const CHANNEL_TRIM_DB = { bass1: 0, bass2: 0, r808: 0, r909: 0 };
+export const CHANNEL_TRIM_DB = { bass1: -4, bass2: -4, r808: 0, r909: 0 };
 
 // Unity at the top: song files usually run channel faders near full.
 const faderGain = (v) => v * v;
