@@ -61,7 +61,7 @@
       // Scheduling everything up front keeps every hit's nodes in the graph for
       // the whole render, which makes long renders quadratically slow.
       const end = seconds - tail;
-      const SLICE = 0.5;
+      const SLICE = 0.1;
       const scheduleUntil = (t) => {
         now = Math.min(t, end);
         clock.schedule();

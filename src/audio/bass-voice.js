@@ -24,7 +24,7 @@ function tuneCents(knob) {
 const GATE = 0.5; // fraction of a step the gate stays open
 const RELEASE = 0.022; // VCA release time constant after the gate closes, seconds
 const GLIDE = 0.017; // slide time constant, seconds; exponential in pitch, not Hz
-const LEVEL = 0.43; // overall level, matched to the test song at mixer level 80
+const LEVEL = 1.244; // overall level, matched to the test song at mixer level 80
 
 // Static filter, per cutoff c and resonance r (both 0..1). A held sawtooth's
 // harmonics match ReBirth within ~0.7 dB across cutoff 0..127 x resonance 0..127:

@@ -165,7 +165,7 @@ export class EffectsColumn {
     hits.rect(ctx, 14, 24, 52, 36, knobDrag(state, 'fx.delay.steps'));
     const triplet = state.on01('fx.delay.triplet');
     const off = button(ctx, 14, 70, 52, 14, { pressed: triplet, face: triplet ? [shade(C.delay, 0.3), C.delay] : C.btnDark });
-    text(ctx, triplet ? '1/16 TRIPLET' : '1/16 STEPS', 40, 77.5 + off, { size: 5.5, weight: 800, color: triplet ? C.bassInk : C.inkLight });
+    text(ctx, triplet ? '1/8 TRIPLET' : '1/16 STEPS', 40, 77.5 + off, { size: 5.5, weight: 800, color: triplet ? C.bassInk : C.inkLight });
     hits.rect(ctx, 14, 70, 52, 14, toggle(state, 'fx.delay.triplet'));
   }
 

@@ -13,6 +13,16 @@
   - Slides are quicker.
   - The square wave is ReBirth's slightly lopsided pulse.
   - More of the low fundamental comes through.
+- **Effects measured against ReBirth.** A second test song ran a steady tone through every effect setting:
+  - Delay: echoes now land on ReBirth's timing. Steps count sixteenths, and the triplet mode counts eighth-note triplets, so the classic 3-step delay is a dotted eighth again. Feedback halves each repeat at 64 and repeats forever at full, echoes keep their tone, and the send is gentler.
+  - Distortion: shape 0 is ReBirth's 1.5-mode hard clipper; higher shapes fold the wave over more and more. Amount drives harder, up to +24 dB, without evening out the level.
+  - Compressor: threshold works the right way round (turning it down compresses more, as on ReBirth), with ReBirth's ratio, knee and makeup gain.
+  - Channel faders follow ReBirth's curve: even steps in dB, so lower settings are much quieter than before.
+
+### Fixed
+- Old ReBirth 2.0 songs with no compressor assigned no longer play with it on the master (TGV's KiloMix '98 was squashed).
+- The pattern filter lands on the right channel in ReBirth 2.0.1 songs (it was one channel off).
+- Song automation lands exactly on its step instead of up to a step early.
 
 ## 0.3.0 — 2026-10-09
 

@@ -10,7 +10,7 @@ import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { BASS_IDS, DRUM_IDS, HIT } from '../state.js';
 import { BassVoice } from './bass-voice.js';
 import { KITS, playHit } from './drums.js';
-import { createDelay, distMakeup, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
+import { builtinMakeupDb, createDelay, DIST, distDrive, foldCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
 import { PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent', 'volume', 'waveform'];
@@ -39,8 +39,35 @@ const AC_DEPTH = { r808: 0.8, r909: 6 };
 const INPUT_GAIN = { bass1: 1, bass2: 1, r808: 0.55, r909: 0.55 };
 export const CHANNEL_TRIM_DB = { bass1: 0, bass2: 0, r808: 0, r909: 0 };
 
-// Unity at the top: song files usually run channel faders near full.
-const faderGain = (v) => v * v;
+// Channel faders: linear in dB, 0.367 dB per step of 127 (measured
+// in a ReBirth export: 11.7 dB per 32 steps, 32 dB from 40 to 127), unity at the top.
+const faderGain = (v) => (v > 0 ? 10 ** ((-0.367 * 127 * (1 - v)) / 20) : 0);
+// Master fader: not measured yet.
+const masterGain = (v) => v * v;
+
+// Compressor, fitted to a ReBirth export of a steady tone with the fader stepping
+// through 32/64/96/127 under every threshold and amount. Levels are the export's
+// RMS in dB at master 100.
+// Fits all 36 quarter-bar levels within 0.12 dB RMS:
+//  threshold: amplitude proportional to the knob, -14.9 dB at the top (a full-level
+//    channel is just not compressed there), floored at -48.9 dB
+//  amount: the ratio, 1:1 at 0 to ~45:1 at the top; soft knee, 7 dB wide
+//  makeup: grows with how low the threshold sits, -2.3 dB at the top (x amount)
+const COMP_TOP_DB = -14.94;
+const COMP_KNEE_DB = 7.1;
+function compCurve(threshold, amount) {
+  const thresholdDb = Math.max(-48.94, 20 * Math.log10(Math.max(threshold, 1e-6)) + COMP_TOP_DB);
+  const slope = 0.978 * amount ** 1.34; // 1 - 1/ratio
+  const makeupDb = amount * (0.077 * (COMP_TOP_DB - thresholdDb) ** 1.57 - 2.31);
+  return { thresholdDb, ratio: 1 / (1 - slope), makeupDb };
+}
+// Export dB (master 100) -> the compressor's input: the master bus runs 10 dB
+// hotter (master fader and volume follow it), a channel 3 dB hotter still (before
+// the pan), and ReBirth's channel compressor measured 2 dB less sensitive.
+const COMP_CREST_DB = 5.5;
+const COMP_IN_DB = { master: 9.97 + COMP_CREST_DB, channel: 9.97 + COMP_CREST_DB + 3 + 2 };
+// Web Audio thresholds stop at 0 dB: the compressor runs this much lower inside.
+const COMP_HEADROOM_DB = 30;
 
 export class AudioEngine {
   constructor(state) {
@@ -193,11 +220,13 @@ export class AudioEngine {
     return a;
   }
 
-  // Smoothly move an AudioParam, skipping values that haven't changed.
+  // Smoothly move an AudioParam, skipping values that haven't changed. While a
+  // step is being scheduled (ahead of the clock), its automation lands on the
+  // step's time rather than now.
   set = (param, value, tau = 0.012) => {
     if (this.last.get(param) === value) return;
     this.last.set(param, value);
-    param.setTargetAtTime(value, this.ctx.currentTime, tau);
+    param.setTargetAtTime(value, this.at ?? this.ctx.currentTime, tau);
   };
 
   bassParams(id) {
@@ -235,21 +264,25 @@ export class AudioEngine {
       // Measured against ReBirth: its pan law is a little gentler than equal-power at full width.
       set(ch.pan.pan, panPos(g(`mixer.${id}.pan`)));
       set(ch.fader.gain, faderGain(g(`mixer.${id}.level`)));
-      set(ch.send.gain, g(`mixer.${id}.delay`) ** 2);
+      // Measured: send 64 echoes 5.1 dB below send 127, close to linear amplitude.
+      set(ch.send.gain, g(`mixer.${id}.delay`));
       const audible = state.on01(`${id}.on`) && !state.on01(`mixer.${id}.mute`) && (!anySolo || state.on01(`mixer.${id}.solo`));
       set(ch.mute.gain, audible ? 1 : 0, 0.005);
     }
-    set(this.masterFader.gain, faderGain(g('mixer.master.level')));
+    set(this.masterFader.gain, masterGain(g('mixer.master.level')));
     set(this.volume.gain, g('master.volume') ** 2 * 0.8);
 
     const d = this.delay;
     set(d.in.gain, state.on01('fx.delay.on') ? 1 : 0, 0.01);
     const steps = state.choice('fx.delay.steps', DELAY_STEPS) + 1;
-    const unit = this.stepDuration() * (state.on01('fx.delay.triplet') ? 2 / 3 : 1);
+    // Steps count sixteenths, or eighth-note triplets (4/3 of a sixteenth).
+    const unit = this.stepDuration() * (state.on01('fx.delay.triplet') ? 4 / 3 : 1);
     set(d.delay.delayTime, Math.min(11.9, steps * unit), 0.05);
-    set(d.feedback.gain, g('fx.delay.feedback') * 0.85);
+    // Each repeat is `feedback` times the last: -6 dB at 64, endless at 127.
+    set(d.feedback.gain, g('fx.delay.feedback'));
     set(d.pan.pan, panPos(g('fx.delay.pan')));
-    set(this.delayReturn.gain, g('mixer.delayReturn') * 1.2);
+    // At full send an echo is 1.8 dB below the dry note (return knob at its default).
+    set(this.delayReturn.gain, g('mixer.delayReturn') * 1.48);
 
     this.syncInserts();
   }
@@ -273,34 +306,38 @@ export class AudioEngine {
       }
     }
 
-    const amount = g('fx.dist.amount');
-    const shape = g('fx.dist.shape');
-    const drive = 0.5 + amount * amount * 12;
-    const distKey = `${drive.toFixed(3)}:${shape.toFixed(3)}`;
-    if (distKey !== this.distKey) {
-      this.distKey = distKey;
-      this.distGain = distMakeup(drive, shape);
+    const drive = distDrive(g('fx.dist.amount'));
+    const shape = Math.round(g('fx.dist.shape') * 127) / 127;
+    const folds = shape > 0;
+    if (folds && shape !== this.foldShape) {
+      this.foldShape = shape;
+      this.foldCurve = foldCurve(shape);
     }
-
-    const ca = g('fx.comp.amount');
+    const curve = compCurve(g('fx.comp.threshold'), g('fx.comp.amount'));
     const lowpass = state.on01('fx.pcf.mode');
     const type = PCF_TYPES[lowpass ? 1 : 0];
     const reso = g('fx.pcf.reso');
     for (const chain of chains) {
+      // Shaper inputs clamp at +-1, so the drive gains scale to the clip levels.
       const dist = chain.stages.dist.fx;
-      set(dist.drive.gain, drive);
-      set(dist.mix.soft.gain, (1 - shape) * this.distGain);
-      set(dist.mix.hard.gain, shape * this.distGain);
-      // Fitted to a ReBirth recording: threshold spans 0 to -20 dB, and about a
-      // third of the gain reduction comes back as makeup gain.
-      const { comp, makeup } = chain.stages.comp.fx;
-      const thresholdDb = -g('fx.comp.threshold') * 20;
-      const ratio = 1 + ca * 11;
+      if (folds && dist.fold.curve !== this.foldCurve) dist.fold.curve = this.foldCurve;
+      set(dist.drive.clip.gain, drive / (DIST.clip * DIST.ref));
+      set(dist.drive.fold.gain, drive / (DIST.foldClip * DIST.ref));
+      set(dist.mix.clip.gain, folds ? 0 : DIST.clip * DIST.ref);
+      set(dist.mix.fold.gain, folds ? DIST.ref : 0);
+      // The built-in compressor adds its own makeup gain; undo it so only ours applies.
+      const { comp, pre, makeup } = chain.stages.comp.fx;
+      // Web Audio's knee starts at the threshold; the fitted one is centred on it.
+      const thresholdDb = curve.thresholdDb - COMP_KNEE_DB / 2 + (chain === this.masterInserts ? COMP_IN_DB.master : COMP_IN_DB.channel) - COMP_HEADROOM_DB;
+      const builtinDb = builtinMakeupDb(thresholdDb, COMP_KNEE_DB, curve.ratio);
+      set(pre.gain, 10 ** (-COMP_HEADROOM_DB / 20));
       set(comp.threshold, thresholdDb);
-      set(comp.ratio, ratio);
-      set(comp.attack, 0.004);
-      set(comp.release, 0.15);
-      set(makeup.gain, 10 ** ((-thresholdDb * (1 - 1 / ratio) * 0.3) / 20));
+      set(comp.knee, COMP_KNEE_DB);
+      set(comp.ratio, curve.ratio);
+      // ReBirth: the gain falls ~10 dB in 150 ms and recovers ~10 dB in 60 ms.
+      set(comp.attack, 0.003);
+      set(comp.release, 0.25);
+      set(makeup.gain, 10 ** ((curve.makeupDb - builtinDb + COMP_HEADROOM_DB) / 20));
       const filter = chain.stages.pcf.fx.filter;
       if (filter.type !== type) filter.type = type;
       // Q is in dB for lowpass, linear for bandpass. The bandpass is fairly
@@ -314,7 +351,9 @@ export class AudioEngine {
   // positions: { deviceId: step index within its current pattern }
   playStep(positions, time, stepDur) {
     const { state } = this;
+    this.at = time;
     this.sync();
+    this.at = null;
     for (const id of BASS_IDS) {
       const pattern = state.pattern(id);
       const pos = positions[id];
