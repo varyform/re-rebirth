@@ -1,6 +1,8 @@
 import { drawAbout } from './about.js';
 import { drawAutomation } from './automation.js';
 import { Bassline } from './devices/bassline.js';
+import { CHANNELS } from '../channels.js';
+import { ChannelStrip, STRIP_W } from './devices/channel-strip.js';
 import { DrumMachine, R808, R909 } from './devices/drum-machine.js';
 import { EffectsColumn } from './devices/effects.js';
 import { Transport } from './devices/transport.js';
@@ -16,11 +18,11 @@ const DRUM08_H = 200;
 const DRUM09_H = 188;
 const GAP = 3;
 const INSTRUMENT_W = 772;
-const EFFECTS_W = 300;
+const EFFECTS_W = 240;
 
 // Minimum (1:1) design size. The rack can be built larger in either direction;
 // devices then spread their controls into the extra room.
-export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + EFFECTS_W;
+export const RACK_W = RAIL_W * 2 + INSTRUMENT_W + GAP + STRIP_W + GAP + EFFECTS_W;
 const ROWS_H = BASS_H * 2 + DRUM08_H + DRUM09_H;
 export const RACK_H = MARGIN * 2 + TRANSPORT_H + GAP + ROWS_H + GAP * 3;
 // Beyond this much stretch, extra window space becomes empty margin around the rack.
@@ -35,12 +37,12 @@ export class Rack {
     this.width = Math.max(RACK_W, width);
     this.height = Math.max(RACK_H, height);
 
-    // Extra width goes to both columns in proportion to their base widths; extra
-    // height to the instrument rows in proportion to theirs (the transport keeps
-    // a small share).
+    // Extra width goes to the instrument and effects columns in proportion to their
+    // base widths (channel strips stay fixed); extra height to the instrument rows
+    // in proportion to theirs (the transport keeps a small share).
     const extraW = this.width - RACK_W;
     const instW = INSTRUMENT_W + (extraW * INSTRUMENT_W) / (INSTRUMENT_W + EFFECTS_W);
-    const fxW = this.width - RAIL_W * 2 - GAP - instW;
+    const fxW = this.width - RAIL_W * 2 - GAP - STRIP_W - GAP - instW;
     const extraH = this.height - RACK_H;
     const rows = ROWS_H;
     const transportH = TRANSPORT_H + extraH * 0.08;
@@ -59,14 +61,17 @@ export class Rack {
       [(...r) => new DrumMachine(state, app, ...r, R808), DRUM08_H],
       [(...r) => new DrumMachine(state, app, ...r, R909), DRUM09_H],
     ];
-    for (const [make, base] of instruments) {
+    const stripX = x + instW + GAP;
+    instruments.forEach(([make, base], index) => {
       const h = grow(base);
       this.devices.push(make(x, y, instW, h));
+      const [id, label] = CHANNELS[index];
+      this.devices.push(new ChannelStrip(state, stripX, y, STRIP_W, h, { id, label, index }));
       bands.push({ y: y - top, h });
       y += h + GAP;
-    }
+    });
     const bottom = y - GAP;
-    this.devices.push(new EffectsColumn(state, x + instW + GAP, top, fxW, bottom - top, bands, GAP));
+    this.devices.push(new EffectsColumn(state, stripX + STRIP_W + GAP, top, fxW, bottom - top, bands, GAP));
   }
 
   draw(ctx) {

@@ -2,47 +2,41 @@ import { DELAY_STEPS } from '../../audio/engine.js';
 import { PCF_WAVE_COUNT, PCF_WAVES } from '../../audio/pcf-waves.js';
 import { CHANNELS, COMP_TARGETS, PCF_TARGETS } from '../../channels.js';
 import { hits } from '../../ui/hits.js';
-import { click, faderDrag, knobDrag, toggle } from '../../ui/handlers.js';
+import { click, knobDrag, toggle } from '../../ui/handlers.js';
 import { Knob } from '../controls.js';
-import { button, fader, icon, lcd, led, ledBar, line, MONO, panel, rrect, sevenSeg, sevenSegWidth, shade, text, vgrad } from '../primitives.js';
-import { C, KNOB } from '../theme.js';
+import { brushed, button, icon, lcd, led, ledBar, MONO, panel, rrect, sevenSeg, sevenSegWidth, shade, text, vgrad } from '../primitives.js';
+import { C } from '../theme.js';
+import { spectrumDisplay } from '../spectrum.js';
+import { vuMeter } from '../vu-meter.js';
+import { compHere, drawButton, drawFaderWithMeters, styleFor, toggleComp } from './channel-strip.js';
 
 const MODULES = [
-  { key: 'mixer', title: 'MIXER', accent: C.mixer },
+  { key: 'master', title: 'MASTER', accent: C.mixer },
   { key: 'delay', title: 'DELAY', accent: C.delay, toggle: 'fx.delay.on' },
   { key: 'dist', title: 'DISTORTION', accent: C.dist, toggle: 'fx.dist.on' },
   { key: 'comp', title: 'COMPRESSOR', accent: C.comp, toggle: 'fx.comp.on' },
   { key: 'pcf', title: 'PATTERN FILTER', accent: C.pcf, toggle: 'fx.pcf.on' },
 ];
 
-const CH_W = 58;
-const FADER_Y = 150;
-const FADER_CAP = 11;
-const CH_BUTTONS = [
-  ['M', 'mute', C.ledOrange],
-  ['S', 'solo', C.ledGreen],
-  ['D', 'dist', C.dist],
-];
-const ROW_A = 117; // mute / solo
-const ROW_B = 133; // distortion / pattern filter / compressor routing
-const styleFor = (accent) => ({ ...KNOB.fx, pointers: [[accent, 0.22, 0.95, 0.15]] });
+
 // Effect modules are laid out for this size; a larger rack spreads them
 // horizontally and centres their contents vertically.
 const BASE_W = 300;
 const BASE_MODULE_H = 92;
+const MASTER_COL_X = 60; // delay return + COMP column, right of the master fader and meters
 
-// Right-hand column. Module rows line up with the instrument rows beside it
-// (`bands`): the mixer spans both bass lines, each drum row holds two effects.
+// Right-hand column, roughly like ReBirth's: the master beside bass line 1, the
+// pattern filter beside bass line 2, delay and distortion beside Drum 08 and the
+// compressor beside Drum 09 (`bands` are those instrument rows).
 export class EffectsColumn {
   constructor(state, x, y, w, h, bands, gap) {
     Object.assign(this, { state, x, y, w, h });
     this.k = w / BASE_W;
-    this.chW = (w - 10) / (CHANNELS.length + 1);
     const rects = moduleRects(bands, gap);
     this.modules = MODULES.map((m) => ({ ...m, ...rects[m.key], w, knobs: [] }));
     this.mod = Object.fromEntries(this.modules.map((m) => [m.key, m]));
     for (const m of this.modules) if (m.toggle) state.define(m.toggle, 1);
-    this.layoutMixer(this.mod.mixer);
+    this.layoutMaster(this.mod.master);
     this.layoutEffects();
   }
 
@@ -51,23 +45,9 @@ export class EffectsColumn {
     m.knobs.push(new Knob({ x, y, r, param, label, style: styleFor(m.accent), ...extra }));
   }
 
-  layoutMixer(m) {
-    const small = { ticks: 7, labelSize: 5.5 };
-    CHANNELS.forEach(([id], i) => {
-      const cx = this.chX(i) + CH_W / 2;
-      this.addKnob(m, cx, 52, 10, `mixer.${id}.pan`, 'PAN', 0.5, small);
-      this.addKnob(m, cx, 94, 10, `mixer.${id}.delay`, 'DELAY', i === 0 ? 0.4 : 0.1, { ...small, style: styleFor(C.delay) });
-      for (const [, k] of CH_BUTTONS) this.state.define(`mixer.${id}.${k}`, k === 'dist' && i === 0 ? 1 : 0);
-      this.state.define(`mixer.${id}.level`, 0.72);
-    });
-    const cx = this.chX(CHANNELS.length) + CH_W / 2;
-    this.addKnob(m, cx, 52, 10, 'mixer.delayReturn', 'DLY RTN', 0.6, { ...small, style: styleFor(C.delay) });
+  layoutMaster(m) {
+    this.addKnob(m, MASTER_COL_X + 20, 44, 12, 'mixer.delayReturn', 'DLY RETURN', 0.6, { style: styleFor(C.delay), labelSize: 5.5 });
     this.state.define('mixer.master.level', 0.8);
-  }
-
-  // Left edge of mixer strip i's 58-wide content, centred in its share of the width.
-  chX(i) {
-    return 6 + i * this.chW + (this.chW - CH_W) / 2;
   }
 
   layoutEffects() {
@@ -101,7 +81,7 @@ export class EffectsColumn {
       ctx.save();
       ctx.translate(0, m.y);
       this.drawFrame(ctx, m);
-      if (m.key === 'mixer') this.drawMixer(ctx, m);
+      if (m.key === 'master') this.drawMaster(ctx, m);
       else {
         // Effect contents keep their base height, centred below the title bar.
         ctx.translate(0, Math.max(0, (m.h - BASE_MODULE_H) / 2));
@@ -116,8 +96,10 @@ export class EffectsColumn {
     }
   }
 
+  // Brushed neutral grey, so the effects read apart from the slate channel strips.
   drawFrame(ctx, m) {
-    panel(ctx, 0, 0, m.w, m.h, C.fx);
+    panel(ctx, 0, 0, m.w, m.h, C.fxPanel);
+    brushed(ctx, 1, 15, m.w - 2, m.h - 16, 0.25);
     ctx.fillStyle = vgrad(ctx, 1, 15, C.fxTitle);
     ctx.fillRect(1, 1, m.w - 2, 14);
     rrect(ctx, 6, 4.5, 3, 7, 1);
@@ -131,72 +113,29 @@ export class EffectsColumn {
     }
   }
 
-  drawMixer(ctx, m) {
+  // Master fader with its left/right meter, then a column with the delay return
+  // and the master COMP button (the compressor's master position). The rest shows
+  // analogue VU needles for left and right, or (click to switch) a spectrum.
+  drawMaster(ctx, m) {
     const { state } = this;
-    const faderH = m.h - 14 - FADER_Y;
-    const strip = (x0, label, levelParam) => {
-      text(ctx, label, x0 + CH_W / 2, 27, { size: 6.5, weight: 800 });
-      fader(ctx, x0 + 8, FADER_Y, 18, faderH, state.get(levelParam));
-      hits.rect(ctx, x0 + 8, FADER_Y, 18, faderH, faderDrag(state, levelParam, faderH - FADER_CAP));
-    };
+    const fy = 30;
+    drawFaderWithMeters(ctx, state, 18, fy, m.h - 12 - fy, 'mixer.master.level', state.meters.master);
+    drawButton(ctx, MASTER_COL_X, 74, 40, 'COMP', compHere(state, 0), C.comp, () => toggleComp(state, 0));
 
-    CHANNELS.forEach(([id, label], i) => {
-      const x0 = this.chX(i);
-      strip(x0, label, `mixer.${id}.level`);
-      this.drawMeter(ctx, x0 + 36, FADER_Y + 2, faderH - 4, state.meters[id] ?? 0);
-      this.drawChannelButtons(ctx, x0, id, i);
-      const sx = 6 + (i + 1) * this.chW;
-      ctx.lineWidth = 1;
-      ctx.strokeStyle = 'rgba(0,0,0,0.45)';
-      line(ctx, sx - 1.5, 20, sx - 1.5, m.h - 6);
-      ctx.strokeStyle = 'rgba(255,255,255,0.07)';
-      line(ctx, sx - 0.5, 20, sx - 0.5, m.h - 6);
-    });
-
-    const x0 = this.chX(CHANNELS.length);
-    strip(x0, 'MASTER', 'mixer.master.level');
-    const level = state.meters.master ?? 0;
-    this.drawMeter(ctx, x0 + 33, FADER_Y + 2, faderH - 4, level, 5);
-    this.drawMeter(ctx, x0 + 42, FADER_Y + 2, faderH - 4, level, 5);
-    text(ctx, 'L', x0 + 35.5, FADER_Y - 7, { size: 5.5, color: C.inkMuted });
-    text(ctx, 'R', x0 + 44.5, FADER_Y - 7, { size: 5.5, color: C.inkMuted });
-  }
-
-  // Like ReBirth's mixer: DIST is per channel, while PCF and COMP place the single
-  // pattern filter / compressor on one channel (radio buttons). No channel COMP
-  // lit means the compressor works on the master bus.
-  drawChannelButtons(ctx, x0, id, i) {
-    const { state } = this;
-    const nComp = COMP_TARGETS.length;
-    const nPcf = PCF_TARGETS.length;
-    const pcfHere = state.choice('fx.pcf.target', nPcf) === i + 1;
-    const compHere = state.on01('fx.comp.routed') && state.choice('fx.comp.target', nComp) === i + 1;
-    const [mute, solo, dist] = CH_BUTTONS.map(([label, k, color]) => [label, `mixer.${id}.${k}`, color]);
-    this.drawButton(ctx, x0 + 4, ROW_A, 23, mute[0], state.on01(mute[1]), mute[2], () => state.toggle(mute[1]));
-    this.drawButton(ctx, x0 + 30, ROW_A, 23, solo[0], state.on01(solo[1]), solo[2], () => state.toggle(solo[1]));
-    this.drawButton(ctx, x0 + 4, ROW_B, 15, dist[0], state.on01(dist[1]), dist[2], () => state.toggle(dist[1]));
-    this.drawButton(ctx, x0 + 21, ROW_B, 15, 'P', pcfHere, C.pcf, () => state.setChoice('fx.pcf.target', pcfHere ? 0 : i + 1, nPcf));
-    this.drawButton(ctx, x0 + 38, ROW_B, 15, 'C', compHere, C.comp, () => {
-      state.set('fx.comp.routed', 1);
-      state.setChoice('fx.comp.target', compHere ? 0 : i + 1, nComp);
-    });
-  }
-
-  drawButton(ctx, x, y, w, label, on, color, onClick) {
-    const face = on ? [shade(color, 0.3), color] : C.btnDark;
-    const off = button(ctx, x, y, w, 13, { face, pressed: on });
-    text(ctx, label, x + w / 2, y + 7 + off, { size: 7, weight: 800, color: on ? C.bassInk : C.inkLight });
-    hits.rect(ctx, x, y, w, 13, click(onClick));
-  }
-
-  drawMeter(ctx, x, y, h, level, w = 6) {
-    const count = Math.floor(h / 8);
-    const pitch = h / count;
-    const lit = Math.round(level * count);
-    for (let i = 0; i < count; i++) {
-      const color = i >= count - 1 ? C.ledRed : i >= count - 4 ? C.ledYellow : C.ledGreen;
-      ledBar(ctx, x, y + (count - 1 - i) * pitch, w, pitch - 2.5, i < lit, color);
+    const vx = MASTER_COL_X + 52;
+    const vw = m.w - 14 - vx;
+    const top = 24;
+    const total = m.h - 12 - top;
+    if (state.ui.masterView === 'spectrum') {
+      spectrumDisplay(ctx, vx, top, vw, total, state.meters.spectrum);
+    } else {
+      const vh = (total - 6) / 2;
+      const [l, r] = state.meters.vu ?? [0, 0];
+      vuMeter(ctx, vx, top, vw, vh, l, 'L');
+      vuMeter(ctx, vx, top + vh + 6, vw, vh, r, 'R');
     }
+    const flip = () => (state.ui.masterView = state.ui.masterView === 'spectrum' ? 'vu' : 'spectrum');
+    hits.rect(ctx, vx, top, vw, total, click(flip));
   }
 
   // Horizontal LED strip; `lit` LEDs from the left. Colors: green, then yellow, red at the end.
@@ -229,7 +168,7 @@ export class EffectsColumn {
     hits.rect(ctx, 14, 70, 52, 14, toggle(state, 'fx.delay.triplet'));
   }
 
-  // Distortion is switched per channel (D buttons in the mixer): show which, and
+  // Distortion is switched per channel (DIST buttons on the strips): show which, and
   // the level coming out of the distortion.
   drawDist(ctx, m) {
     const x = 160 * this.k;
@@ -237,14 +176,14 @@ export class EffectsColumn {
     lcd(ctx, x, 26, w, 18, C.lcdGreen);
     const on = this.state.on01('fx.dist.on') ? CHANNELS.filter(([id]) => this.state.on01(`mixer.${id}.dist`)).map(([, label]) => label.replace(/\D+/g, (s) => s[0])) : [];
     text(ctx, on.length ? on.join(' ') : 'NONE', x + w / 2, 35.5, { size: 7, family: MONO, color: C.lcdGreenOn });
-    text(ctx, 'ON CHANNELS (MIXER D)', x + w / 2, 51, { size: 5, color: C.inkMuted, spacing: 0.5 });
+    text(ctx, 'ON CHANNELS (DIST)', x + w / 2, 51, { size: 5, color: C.inkMuted, spacing: 0.5 });
     const level = this.fxMeters().dist ?? 0;
     this.ledRow(ctx, x, 60, w, 10, Math.round(level * 10), { yellowFrom: 7, redFrom: 9 });
     text(ctx, 'OUTPUT', x + w / 2, 74, { size: 5.5, color: C.inkMuted, spacing: 0.6 });
   }
 
   // Gain-reduction meter (2 dB per LED) plus where the compressor sits. Routing
-  // is set with the mixer's C buttons; none lit = master.
+  // is set with the COMP buttons on the channel strips and the master module.
   drawComp(ctx, m) {
     const { state } = this;
     const x = 160 * this.k;
@@ -332,6 +271,5 @@ function moduleRects([bass1, bass2, drum1, drum2], gap) {
     ];
   };
   const [delay, dist] = split(drum1);
-  const [comp, pcf] = split(drum2);
-  return { mixer: { y: bass1.y, h: bass2.y + bass2.h - bass1.y }, delay, dist, comp, pcf };
+  return { master: bass1, pcf: bass2, delay, dist, comp: drum2 };
 }

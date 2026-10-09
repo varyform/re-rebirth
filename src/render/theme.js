@@ -25,7 +25,8 @@ export const C = {
   btnDark: ['#56595f', '#2a2c31'],
   btnPressed: ['#2a2c31', '#3c3f45'],
 
-  fx: ['#3a3f4a', '#22252c'],
+  fx: ['#3a3f4a', '#22252c'], // channel strips
+  fxPanel: ['#34363b', '#1b1c20'], // effect modules: neutral grey, brushed
   fxTitle: ['#17191d', '#0f1013'],
   mixer: '#d9dce3',
   delay: '#4fb3ff',
@@ -49,6 +50,12 @@ export const C = {
   r808Steps: ['#e8371f', '#f28c1c', '#f4d03a', '#efe9d8'],
 
   logo: ['#ffffff', '#c9ccd2', '#7d828c', '#dfe2e8'],
+
+  // Analogue VU meters: backlit amber face, dark ink, red zone above 0 VU.
+  vuFace: ['#f6e0a8', '#dcb46a'],
+  vuInk: '#2b1d0c',
+  vuRed: '#c4291c',
+  vuNeedle: '#161412',
 
   // Automation / grid windows
   screen: ['#0b0c0f', '#12141a'],

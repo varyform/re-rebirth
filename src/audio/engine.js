@@ -17,6 +17,8 @@ const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent'
 export const DELAY_STEPS = 32;
 const MAX_SWING = 0.42; // fraction of a step that off-beats move at full shuffle
 const METER_RANGE_DB = 48;
+const VU_REF_DB = 16; // dBFS RMS that reads 0 VU
+const SPECTRUM_BANDS = 28;
 const MAX_FILTER_HZ = 14000;
 // Pan knob offset -> equal-power pan position, clamped at the ends. Fitted to
 // ReBirth's per-channel exports (808 at pan 0.22 / 0.28 / 0.63 / 0.71: right minus
@@ -71,10 +73,10 @@ export class AudioEngine {
     this.volume = ctx.createGain();
     this.masterFader = ctx.createGain();
     this.masterBus = ctx.createGain();
-    this.masterMeter = this.analyser();
+    this.masterMeter = this.stereoMeter(clipper);
+    this.spectrum = this.spectrumAnalyser(clipper);
     this.masterInserts = new InsertChain(ctx, this.masterBus, this.masterFader);
     this.masterFader.connect(this.volume).connect(limiter).connect(clipper).connect(ctx.destination);
-    clipper.connect(this.masterMeter);
 
     this.delay = createDelay(ctx);
     this.delayReturn = ctx.createGain();
@@ -88,14 +90,13 @@ export class AudioEngine {
       const fader = ctx.createGain();
       const mute = ctx.createGain();
       const send = ctx.createGain();
-      const meter = this.analyser();
       input.gain.value = INPUT_GAIN[id];
       post.gain.value = 10 ** (CHANNEL_TRIM_DB[id] / 20);
       const inserts = new InsertChain(ctx, input, post);
       post.connect(pan).connect(fader).connect(mute).connect(this.masterBus);
-      mute.connect(meter);
+      const meter = this.stereoMeter(mute);
       mute.connect(send).connect(this.delay.in);
-      this.channels[id] = { label, input, inserts, pan, fader, mute, send, meter, level: 0 };
+      this.channels[id] = { label, input, inserts, pan, fader, mute, send, meter };
     }
     // Effect activity meters: delay echoes, and each chain's distortion output.
     this.delayMeter = this.analyser();
@@ -109,8 +110,77 @@ export class AudioEngine {
     this.bass = Object.fromEntries(BASS_IDS.map((id) => [id, new BassVoice(ctx, this.channels[id].input)]));
     this.kits = Object.fromEntries(DRUM_IDS.map((id) => [id, {}]));
     this.meterBuf = new Float32Array(512);
-    this.masterLevel = 0;
     this.sync();
+  }
+
+  // Left/right peak meters on a stereo signal.
+  stereoMeter(source) {
+    const split = this.ctx.createChannelSplitter(2);
+    source.connect(split);
+    const sides = [this.analyser(), this.analyser()];
+    sides.forEach((a, i) => split.connect(a, i));
+    return { sides, levels: [0, 0], vu: [0, 0] };
+  }
+
+  // Spectrum of the master output in log-spaced bands from 40 Hz to 16 kHz.
+  spectrumAnalyser(source) {
+    const analyser = this.ctx.createAnalyser();
+    analyser.fftSize = 2048;
+    analyser.smoothingTimeConstant = 0.5;
+    source.connect(analyser);
+    const binHz = this.ctx.sampleRate / analyser.fftSize;
+    const edges = Array.from({ length: SPECTRUM_BANDS + 1 }, (_, b) => 40 * (16000 / 40) ** (b / SPECTRUM_BANDS));
+    // Bin range per band; narrow low bands get at least one bin.
+    const ranges = edges.slice(0, -1).map((f0, b) => {
+      const i0 = Math.max(1, Math.round(f0 / binHz));
+      return [i0, Math.max(i0, Math.round(edges[b + 1] / binHz) - 1)];
+    });
+    return { analyser, ranges, buf: new Float32Array(analyser.frequencyBinCount), bands: new Array(SPECTRUM_BANDS).fill(0), peaks: new Array(SPECTRUM_BANDS).fill(0) };
+  }
+
+  // state.meters.spectrum = { bands, peaks }, 0..1 over -90..-20 dB, bars falling
+  // back smoothly and peak markers held a little longer.
+  updateSpectrum() {
+    const s = this.spectrum;
+    s.analyser.getFloatFrequencyData(s.buf);
+    let moved = false;
+    s.ranges.forEach(([i0, i1], b) => {
+      let db = -Infinity;
+      for (let i = i0; i <= i1; i++) db = Math.max(db, s.buf[i]);
+      const level = Math.max(0, Math.min(1, (db + 90) / 70));
+      const next = Math.max(level, s.bands[b] - 0.03);
+      if (Math.abs(next - s.bands[b]) > 0.01) moved = true;
+      s.bands[b] = next;
+      const peak = Math.max(next, s.peaks[b] - 0.006);
+      if (Math.abs(peak - s.peaks[b]) > 0.001) moved = true;
+      s.peaks[b] = peak;
+    });
+    this.state.meters.spectrum = s;
+    return moved;
+  }
+
+  // Master VU needles, state.meters.vu = [left, right] as needle travel 0..1:
+  // RMS with ~300 ms ballistics, 0 VU = -16 dBFS RMS, scale -20..+3 VU laid out
+  // linear in amplitude like a real VU face (0 VU at ~70% of the travel).
+  updateVu() {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - (this.vuTime ?? now)) / 1000);
+    this.vuTime = now;
+    const k = 1 - Math.exp(-dt / 0.3);
+    const meter = this.masterMeter;
+    let moved = false;
+    meter.vu = meter.sides.map((a, i) => {
+      a.getFloatTimeDomainData(this.meterBuf);
+      let sum = 0;
+      for (const s of this.meterBuf) sum += s * s;
+      const vu = 10 * Math.log10(sum / this.meterBuf.length + 1e-12) + VU_REF_DB;
+      const target = Math.max(0, Math.min(1, (10 ** (vu / 20) - 0.1) / (10 ** (3 / 20) - 0.1)));
+      const next = meter.vu[i] + (target - meter.vu[i]) * k;
+      if (Math.abs(next - meter.vu[i]) > 0.002) moved = true;
+      return next;
+    });
+    this.state.meters.vu = meter.vu;
+    return moved;
   }
 
   chains() {
@@ -342,12 +412,15 @@ export class AudioEngine {
       if (Math.abs(next - prev) > 0.004) changed = true;
       return next;
     };
-    for (const [id, ch] of Object.entries(this.channels)) {
-      ch.level = read(ch.meter, ch.level);
-      this.state.meters[id] = ch.level;
-    }
-    this.masterLevel = read(this.masterMeter, this.masterLevel);
-    this.state.meters.master = this.masterLevel;
+    // state.meters[channel id | 'master'] = [left, right], 0..1
+    const readStereo = (meter) => {
+      meter.levels = meter.sides.map((a, i) => read(a, meter.levels[i]));
+      return meter.levels;
+    };
+    for (const [id, ch] of Object.entries(this.channels)) this.state.meters[id] = readStereo(ch.meter);
+    this.state.meters.master = readStereo(this.masterMeter);
+    if (this.updateVu()) changed = true;
+    if (this.updateSpectrum()) changed = true;
     return this.updateFxMeters(read) || changed;
   }
 
