@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.0 — 2026-10-10
 
 ### New
 - **Song library.** A LIBRARY button opens every song you've added, kept in the browser between visits:
