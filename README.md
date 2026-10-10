@@ -6,7 +6,7 @@ Everything is drawn on a canvas and every sound is synthesized live with the Web
 
 ![Re-Rebirth playing TGV's KiloMix '98](docs/screenshot.png)
 
-**Try it:** [rb.ol3h.org](https://rb.ol3h.org). Click the logo and choose **Load TGV's KiloMix '98** for an example song, then press <kbd>Space</kbd>.
+**Try it:** [rb.varyform.info](https://rb.varyform.info). Click the logo and choose **Load TGV's KiloMix '98** for an example song, then press <kbd>Space</kbd>.
 
 ## Features
 
@@ -81,11 +81,17 @@ uv run --with numpy --with scipy python tools/steps.py score reference.wav --bpm
 
 ## Deployment
 
-The site is static: a Vite build served by nginx (`Dockerfile`, `config/nginx.conf`). It's deployed with [Kamal](https://kamal-deploy.org) (`config/deploy.yml`), which ships the image through Kamal's local registry:
+The site is static: a Vite build served by nginx (`Dockerfile`, `config/nginx.conf`). It's deployed with [Kamal](https://kamal-deploy.org) (`config/deploy.yml`), which ships the image through Kamal's local registry over SSH; kamal-proxy on the server gets a Let's Encrypt certificate.
+
+The server and hostname live in `.env.deploy` (gitignored). Copy the example and fill it in; variables already set in the shell win:
 
 ```sh
+cp .env.deploy.example .env.deploy   # SITE_SERVER (IP or hostname), SITE_HOST
+kamal setup                          # once per server: installs Docker and kamal-proxy
 kamal deploy
 ```
+
+`SITE_HOST` needs an A record pointing at `SITE_SERVER`, with ports 80 and 443 open for the certificate.
 
 ## Credits
 

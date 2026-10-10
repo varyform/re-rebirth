@@ -4,3 +4,7 @@ tracks
 *.wav
 .DS_Store
 tmp
+
+# Deploy settings (server, host); see .env.deploy.example.
+/.env*
+!/.env.deploy.example
