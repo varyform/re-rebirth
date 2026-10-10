@@ -138,6 +138,10 @@ export class Library {
     return new File([buffer], meta.name);
   }
 
+  files(ids) {
+    return Promise.all(ids.map((id) => this.file(id)));
+  }
+
   async update(id, changes) {
     const meta = this.find(id);
     if (!meta) return;
@@ -189,6 +193,30 @@ export async function collectDropped(dataTransfer) {
   // A single loose file is opened whatever its name, as before.
   if (!folders && files.length === 0 && plain.length === 1) return { files: plain, folders };
   return { files, folders };
+}
+
+// The system share sheet (AirDrop, Mail, Files...) for songs. Safari shares any
+// file; Chrome only media and documents, so .rbs files there (and browsers
+// without sharing) are downloaded instead. Resolves 'shared', 'cancelled' or
+// 'downloaded'. Must start inside a user gesture.
+export async function shareFiles(files) {
+  const data = { files };
+  if (navigator.canShare?.(data)) {
+    try {
+      await navigator.share(data);
+      return 'shared';
+    } catch (err) {
+      if (err.name === 'AbortError') return 'cancelled';
+      // NotAllowedError: the gesture ran out; fall through to downloading.
+      if (err.name !== 'NotAllowedError') throw err;
+    }
+  }
+  for (const file of files) {
+    const a = Object.assign(document.createElement('a'), { href: URL.createObjectURL(file), download: file.name });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  }
+  return 'downloaded';
 }
 
 // File or folder picker for adding to the library. Must run inside a user gesture.

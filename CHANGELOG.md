@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### New
+- **Share songs** from the library with the system share sheet (AirDrop to an iPad, Mail, Files...): the share icon on a row sends that song, SHARE in the toolbar sends every song listed (just the search results while searching). Browsers that can't share files download them instead.
 - Press F to switch full screen on and off. In Chrome and Edge, Escape then closes About, the library or automation first and leaves full screen only from the rack (hold Escape to leave straight away); other browsers leave full screen on Escape as usual.
 
 ### Changed

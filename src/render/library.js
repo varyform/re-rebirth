@@ -1,7 +1,7 @@
 // Song library window: every song the library holds, grouped by the mod it was
 // made for (Standard ReBirth first, as those are the ones that play), sortable by
 // column, with a star rating. Songs we can't open are listed but dimmed.
-import { pickSongs, OTHER_GROUP, SAVES_GROUP, STANDARD_GROUP } from '../song/library.js';
+import { OTHER_GROUP, pickSongs, SAVES_GROUP, shareFiles, STANDARD_GROUP } from '../song/library.js';
 import { hits } from '../ui/hits.js';
 import { click, release } from '../ui/handlers.js';
 import { brushed, button, lcd, led, MONO, panel, rgba, rrect, screws, text, textWidth, vgrad } from './primitives.js';
@@ -26,6 +26,9 @@ const COPY = {
   addFiles: 'ADD FILES',
   addFolder: 'ADD FOLDER',
   close: 'CLOSE',
+  share: (n) => `SHARE ${n}`,
+  shared: (n) => `Shared ${n} song${n === 1 ? '' : 's'}`,
+  downloaded: "This browser can't share song files: downloaded instead",
   hint: 'DROP FILES OR FOLDERS ANYWHERE',
   search: 'Search title, file or mod',
   noMatch: 'NO SONGS MATCH',
@@ -102,12 +105,12 @@ function fit(ctx, s, maxW, opts) {
 }
 
 function columns(W) {
-  const right = W - PAD - 30; // remove button and scrollbar beyond
+  const right = W - PAD - 48; // share and remove buttons, then the scrollbar
   const titleX = PAD + 10 + STAR * 5 + 10;
   const versionX = right - 144;
   const nameW = Math.round((versionX - 12 - titleX) * 0.4);
   const nameX = versionX - 12 - nameW;
-  return { starsX: PAD + 10, titleX, titleW: nameX - 12 - titleX, nameX, nameW, versionX, tempoR: right - 58, barsR: right, removeX: right + 6 };
+  return { starsX: PAD + 10, titleX, titleW: nameX - 12 - titleX, nameX, nameW, versionX, tempoR: right - 58, barsR: right, shareX: right + 8, removeX: right + 24 };
 }
 
 export function drawLibrary(ctx, rackW, rackH, state, app) {
@@ -205,11 +208,21 @@ function drawToolbar(ctx, W, state, app, items, shown, originX) {
 
   const bw = textWidth(ctx, COPY.close, { size: 7.5, weight: 800 }) + 20;
   const cx = W - PAD - bw;
+  // Share every song listed (the search results, when searching).
+  let statsEnd = cx;
+  if (shown.length) {
+    const label = COPY.share(shown.length);
+    const sbw = textWidth(ctx, label, { size: 7.5, weight: 800, spacing: 0.6 }) + 20;
+    statsEnd = cx - 4 - sbw;
+    const off = button(ctx, statsEnd, TOOL_Y, sbw, TOOL_H, { pressed: hits.isPressed('library.share') });
+    text(ctx, label, statsEnd + sbw / 2, TOOL_Y + TOOL_H / 2 + 0.5 + off, { size: 7.5, weight: 800, spacing: 0.6 });
+    hits.rect(ctx, statsEnd, TOOL_Y, sbw, TOOL_H, shareHandler(app, shown.map((s) => s.id), 'library.share'));
+  }
   const playable = shown.filter((s) => s.loadable).length;
   const count = shown.length === items.length ? `${items.length} SONGS` : `${shown.length} OF ${items.length} SONGS`;
   const stats = items.length ? `${count} \u00B7 ${playable} PLAYABLE \u00B7 ` : '';
   const statsOpts = { size: 6.8, align: 'left', color: C.inkMuted, spacing: 0.4 };
-  text(ctx, fit(ctx, `${stats}${COPY.hint}`, cx - 10 - (x + 6), statsOpts), x + 6, TOOL_Y + TOOL_H / 2 + 0.5, statsOpts);
+  text(ctx, fit(ctx, `${stats}${COPY.hint}`, statsEnd - 10 - (x + 6), statsOpts), x + 6, TOOL_Y + TOOL_H / 2 + 0.5, statsOpts);
 
   const off = button(ctx, cx, TOOL_Y, bw, TOOL_H, { pressed: hits.isPressed('library.close') });
   text(ctx, COPY.close, cx + bw / 2, TOOL_Y + TOOL_H / 2 + 0.5 + off, { size: 7.5, weight: 800, spacing: 0.6 });
@@ -302,9 +315,56 @@ function drawRow(ctx, song, y, W, cols, view, app, groupLoadable) {
     star(ctx, sx, cy - 0.5, 5.6, i <= song.rating);
     hits.rect(ctx, sx - STAR / 2, y, STAR, ROW_H, click(() => library.rate(song.id, song.rating === i ? 0 : i)));
   }
+  shareIcon(ctx, cols.shareX + 6, cy, C.inkMuted);
+  hits.rect(ctx, cols.shareX - 1, y + 2, 14, ROW_H - 4, shareHandler(app, [song.id]));
   const rx = cols.removeX;
   text(ctx, '\u00D7', rx + 6, cy, { size: 13, weight: 700, color: C.inkMuted });
   hits.rect(ctx, rx - 1, y + 2, 14, ROW_H - 4, click(() => library.remove(song.id)));
+}
+
+// The share sheet has to open inside the gesture: read the files on press,
+// share on release (which iOS also needs, see `release`).
+function shareHandler(app, ids, key) {
+  return {
+    cursor: 'pointer',
+    key,
+    down: () => {
+      const files = app.library.files(ids);
+      return {
+        up: () =>
+          files
+            .then(shareFiles)
+            .then((result) => {
+              if (result === 'shared') app.notify(COPY.shared(ids.length));
+              if (result === 'downloaded') app.notify(COPY.downloaded);
+            })
+            .catch((err) => app.notify(`Can't share: ${err.message}`)),
+      };
+    },
+  };
+}
+
+// Square with an arrow out of it, like the system share icon.
+function shareIcon(ctx, cx, cy, color) {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 1.3;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(cx - 2.2, cy - 1.5);
+  ctx.lineTo(cx - 4.2, cy - 1.5);
+  ctx.lineTo(cx - 4.2, cy + 5.2);
+  ctx.lineTo(cx + 4.2, cy + 5.2);
+  ctx.lineTo(cx + 4.2, cy - 1.5);
+  ctx.lineTo(cx + 2.2, cy - 1.5);
+  ctx.moveTo(cx, cy + 2.2);
+  ctx.lineTo(cx, cy - 6);
+  ctx.moveTo(cx - 2.6, cy - 3.4);
+  ctx.lineTo(cx, cy - 6);
+  ctx.lineTo(cx + 2.6, cy - 3.4);
+  ctx.stroke();
+  ctx.restore();
 }
 
 async function openSong(app, id) {
