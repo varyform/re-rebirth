@@ -133,11 +133,38 @@ window.addEventListener('keydown', (e) => {
     requestRender();
     return;
   }
+  // Only reaches us in full screen when Escape is locked (see toggleFullscreen).
+  if (e.code === 'Escape' && isFullscreen()) {
+    toggleFullscreen();
+    return;
+  }
+  if (e.code === 'KeyF' && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    toggleFullscreen();
+    return;
+  }
   if (e.code !== 'Space' || e.repeat) return;
   e.preventDefault();
   clock.toggle();
   requestRender();
 });
+
+const isFullscreen = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+
+// Safari before 16.4 only has the prefixed API; iPhone has none for pages.
+// Chromium can lock Escape in full screen, so it closes our windows first and
+// leaves full screen only from the rack (holding Escape still always exits).
+// Elsewhere Escape leaves full screen straight away, as the browser decides.
+function toggleFullscreen() {
+  const root = document.documentElement;
+  if (isFullscreen()) {
+    (document.exitFullscreen ?? document.webkitExitFullscreen)?.call(document);
+    return;
+  }
+  const entered = (root.requestFullscreen ?? root.webkitRequestFullscreen)?.call(root);
+  Promise.resolve(entered)
+    .then(() => navigator.keyboard?.lock?.(['Escape']))
+    .catch(() => { });
+}
 
 // Every user edit goes through the pointer; autosave is debounced.
 // A click on the rack (say, a song in the library) leaves the search field, so

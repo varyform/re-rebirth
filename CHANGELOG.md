@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### New
+- Press F to switch full screen on and off. In Chrome and Edge, Escape then closes About, the library or automation first and leaves full screen only from the rack (hold Escape to leave straight away); other browsers leave full screen on Escape as usual.
+
 ### Changed
 - The song library's list is easier to read: bigger song titles, file names and stars.
 
