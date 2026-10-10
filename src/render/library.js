@@ -16,9 +16,9 @@ const TOOL_H = 19;
 const HEAD_Y = 54;
 const HEAD_H = 18;
 const LIST_Y = HEAD_Y + HEAD_H + 2;
-const ROW_H = 23;
-const GROUP_H = 25;
-const STAR = 12; // star pitch
+const ROW_H = 28;
+const GROUP_H = 28;
+const STAR = 14; // star pitch
 const TAP_SLOP = 4; // units a press may move and still count as a tap
 
 const COPY = {
@@ -104,10 +104,10 @@ function fit(ctx, s, maxW, opts) {
 function columns(W) {
   const right = W - PAD - 30; // remove button and scrollbar beyond
   const titleX = PAD + 10 + STAR * 5 + 10;
-  const versionX = right - 128;
+  const versionX = right - 144;
   const nameW = Math.round((versionX - 12 - titleX) * 0.4);
   const nameX = versionX - 12 - nameW;
-  return { starsX: PAD + 10, titleX, titleW: nameX - 12 - titleX, nameX, nameW, versionX, tempoR: right - 50, barsR: right, removeX: right + 6 };
+  return { starsX: PAD + 10, titleX, titleW: nameX - 12 - titleX, nameX, nameW, versionX, tempoR: right - 58, barsR: right, removeX: right + 6 };
 }
 
 export function drawLibrary(ctx, rackW, rackH, state, app) {
@@ -230,9 +230,9 @@ function drawHeader(ctx, cols, view) {
     ['rating', cols.starsX, 'left', STAR * 5 + 4],
     ['title', cols.titleX, 'left', cols.titleW],
     ['name', cols.nameX, 'left', cols.nameW],
-    ['version', cols.versionX, 'left', 36],
-    ['tempo', cols.tempoR, 'right', 40],
-    ['bars', cols.barsR, 'right', 40],
+    ['version', cols.versionX, 'left', 40],
+    ['tempo', cols.tempoR, 'right', 46],
+    ['bars', cols.barsR, 'right', 46],
   ];
   for (const [key, x, align, w] of heads) {
     const on = view.sort === key;
@@ -251,16 +251,16 @@ function drawGroup(ctx, g, y, W, view, collapsed) {
   ctx.fillStyle = 'rgba(0,0,0,0.35)';
   ctx.fillRect(PAD, y + GROUP_H - 1, W - PAD * 2, 1);
   const cy = y + GROUP_H / 2 + 0.5;
-  text(ctx, collapsed ? '\u25B8' : '\u25BE', PAD + 9, cy, { size: 9, color: C.inkMuted });
+  text(ctx, collapsed ? '\u25B8' : '\u25BE', PAD + 9, cy, { size: 10, color: C.inkMuted });
   led(ctx, PAD + 22, cy - 0.5, 2.6, g.loadable, C.ledGreen);
   const name = g.name.toUpperCase();
-  text(ctx, name, PAD + 32, cy, { size: 8.5, weight: 800, align: 'left', color: g.loadable ? C.inkLight : C.inkMuted, spacing: 0.8 });
-  const nw = textWidth(ctx, name, { size: 8.5, weight: 800, spacing: 0.8 });
+  text(ctx, name, PAD + 32, cy, { size: 10, weight: 800, align: 'left', color: g.loadable ? C.inkLight : C.inkMuted, spacing: 0.8 });
+  const nw = textWidth(ctx, name, { size: 10, weight: 800, spacing: 0.8 });
   const count = `${g.songs.length} SONG${g.songs.length === 1 ? '' : 'S'}`;
-  text(ctx, count, PAD + 42 + nw, cy, { size: 7, align: 'left', color: C.inkMuted, spacing: 0.4 });
+  text(ctx, count, PAD + 42 + nw, cy, { size: 8, align: 'left', color: C.inkMuted, spacing: 0.4 });
   if (!g.loadable) {
     const why = g.name === OTHER_GROUP ? COPY.notSongs : COPY.needsMod;
-    text(ctx, why, W - PAD - 12, cy, { size: 7, align: 'right', color: C.inkMuted, spacing: 0.4 });
+    text(ctx, why, W - PAD - 12, cy, { size: 8, align: 'right', color: C.inkMuted, spacing: 0.4 });
   }
   hits.rect(ctx, PAD, y, W - PAD * 2, GROUP_H, tapOrScroll(view, () => (view.collapsed[g.name] = !collapsed)));
 }
@@ -278,8 +278,8 @@ function drawRow(ctx, song, y, W, cols, view, app, groupLoadable) {
   ctx.save();
   if (!song.loadable) ctx.globalAlpha = 0.45;
 
-  const opts = { size: 8.8, weight: 700, align: 'left', color: current ? C.ledGreen : C.inkLight };
-  const muted = { size: 7.8, family: MONO, align: 'left', color: C.inkMuted };
+  const opts = { size: 11, weight: 700, align: 'left', color: current ? C.ledGreen : C.inkLight };
+  const muted = { size: 9.5, family: MONO, align: 'left', color: C.inkMuted };
   text(ctx, fit(ctx, displayTitle(song), cols.titleW, opts), cols.titleX, cy, opts);
   text(ctx, fit(ctx, song.name, cols.nameW, muted), cols.nameX, cy, muted);
   if (!song.loadable && groupLoadable) {
@@ -299,12 +299,12 @@ function drawRow(ctx, song, y, W, cols, view, app, groupLoadable) {
 
   for (let i = 1; i <= 5; i++) {
     const sx = cols.starsX + (i - 1) * STAR + STAR / 2;
-    star(ctx, sx, cy - 0.5, 4.6, i <= song.rating);
+    star(ctx, sx, cy - 0.5, 5.6, i <= song.rating);
     hits.rect(ctx, sx - STAR / 2, y, STAR, ROW_H, click(() => library.rate(song.id, song.rating === i ? 0 : i)));
   }
   const rx = cols.removeX;
-  text(ctx, '\u00D7', rx + 5, cy, { size: 11, weight: 700, color: C.inkMuted });
-  hits.rect(ctx, rx - 1, y + 2, 12, ROW_H - 4, click(() => library.remove(song.id)));
+  text(ctx, '\u00D7', rx + 6, cy, { size: 13, weight: 700, color: C.inkMuted });
+  hits.rect(ctx, rx - 1, y + 2, 14, ROW_H - 4, click(() => library.remove(song.id)));
 }
 
 async function openSong(app, id) {

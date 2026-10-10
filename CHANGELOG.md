@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- The song library's list is easier to read: bigger song titles, file names and stars.
+
 ## 0.5.0 — 2026-10-10
 
 ### New
