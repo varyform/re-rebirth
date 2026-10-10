@@ -34,7 +34,7 @@ try {
   await page.waitForTimeout(150);
   await tap((W - 380) / 2 + 84 + 66, (H - 252) / 2 + 223); // LOAD TGV'S KILOMIX '98
   await page.waitForTimeout(1500);
-  await tap(14 + 214 + 4 * 46 + 29, 4 + 47 + 7); // AUTOMATION
+  await tap(14 + 214 + 203 + 23, 4 + 47 + 7); // AUTOMATION
   await page.waitForTimeout(150);
   const gx = 22 + 156;
   const gw = W - 44 - 12 - 156;

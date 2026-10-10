@@ -26,7 +26,7 @@ export class State {
     // App chrome, not part of a song. automation: the open view's scroll/zoom, or
     // null when closed; grid: drum machines showing all lanes instead of knobs;
     // masterView: the master module's meters, 'vu' needles or 'spectrum'.
-    this.ui = { about: false, automation: null, grid: { r808: false, r909: false }, masterView: 'vu' };
+    this.ui = { about: false, automation: null, library: null, grid: { r808: false, r909: false }, masterView: 'vu' };
     this.clearSong();
   }
 

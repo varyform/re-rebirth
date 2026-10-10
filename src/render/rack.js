@@ -1,5 +1,6 @@
 import { drawAbout } from './about.js';
 import { drawAutomation } from './automation.js';
+import { drawLibrary } from './library.js';
 import { Bassline } from './devices/bassline.js';
 import { CHANNELS } from '../channels.js';
 import { ChannelStrip, STRIP_W } from './devices/channel-strip.js';
@@ -87,6 +88,7 @@ export class Rack {
     }
     // Windows are drawn last so their hit regions take every click while open.
     if (this.state.ui.automation) drawAutomation(ctx, this.width, this.height, this.state, this.app);
+    if (this.state.ui.library) drawLibrary(ctx, this.width, this.height, this.state, this.app);
     if (this.state.ui.about) drawAbout(ctx, this.width, this.height, this.state, this.app);
   }
 

@@ -19,7 +19,7 @@ const COPY = {
     'Song file format from publicly shared reverse-engineering notes.',
     'Opens ReBirth 2.0 songs using the standard sounds; songs that need a mod are refused.',
   ],
-  keys: 'SPACE  PLAY / STOP       DROP .RBS / .JSON  OPEN       HOLD REW / FF  SEEK',
+  keys: 'SPACE  PLAY / STOP     DROP A SONG  OPEN · FOLDERS  LIBRARY     HOLD REW / FF  SEEK',
   songsLabel: 'More songs:',
   songsUrl: 'https://nordbeat.com/archive/rebirth/song_archives.htm',
   songsText: 'nordbeat.com/archive/rebirth',

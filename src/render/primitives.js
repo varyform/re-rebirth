@@ -70,9 +70,11 @@ export function text(ctx, s, x, y, opts = {}) {
   }
 }
 
+// Includes letter spacing, as `text` draws it.
 export function textWidth(ctx, s, opts = {}) {
   ctx.font = font(opts);
-  return ctx.measureText(s).width;
+  const spacing = opts.spacing && 'letterSpacing' in ctx ? opts.spacing * s.length : 0;
+  return ctx.measureText(s).width + spacing;
 }
 
 export function panel(ctx, x, y, w, h, stops, { radius = 2, bevel = 0.3 } = {}) {

@@ -91,11 +91,31 @@ export function isRbs(buffer) {
   return buffer.byteLength > 12 && r.str(0, 4) === 'CAT ' && r.str(8, 4) === 'RB40';
 }
 
-export function parseRbs(buffer, fileName = '') {
+const find = (list, id, type) => list.find((c) => c.id === id && (!type || c.type === type));
+
+function topChunks(buffer) {
   const r = new Reader(buffer);
   if (!isRbs(buffer)) throw new Error('Not a ReBirth 2.0 song (expected an RB40 file)');
-  const top = r.chunks(12, Math.min(buffer.byteLength, 8 + r.u32(4)));
-  const find = (list, id, type) => list.find((c) => c.id === id && (!type || c.type === type));
+  return { r, top: r.chunks(12, Math.min(buffer.byteLength, 8 + r.u32(4))) };
+}
+
+// What a song list shows, without reading the whole song: the mod it needs, its
+// embedded title, file version (HEAD byte 6: 2 = 2.0.1) and tempo.
+export function rbsInfo(buffer) {
+  const { r, top } = topChunks(buffer);
+  const glob = find(top, 'GLOB');
+  const usri = find(top, 'USRI');
+  const head = find(top, 'HEAD');
+  return {
+    mod: glob ? r.zstr(glob.at + 15, 65) : '',
+    title: usri ? r.zstr(usri.at, 41).trim() : '',
+    version: head && r.u8(head.at + 6) >= 2 ? '2.0.1' : '2.0',
+    tempo: glob ? r.u32(glob.at + 2) / 1000 : 0,
+  };
+}
+
+export function parseRbs(buffer, fileName = '') {
+  const { r, top } = topChunks(buffer);
   const glob = find(top, 'GLOB');
   const devl = find(top, 'CAT ', 'DEVL');
   const trkl = find(top, 'CAT ', 'TRKL');

@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Song library.** A LIBRARY button opens every song you've added, kept in the browser between visits:
+  - Drop several files or whole folders anywhere (or use ADD FILES / ADD FOLDER); folders are searched all the way down. Dropping one song still just opens it, and every song you open joins the library.
+  - Each song is listed once, however many folders it turns up in.
+  - Songs are grouped by the ReBirth edition (mod) they were made for, Standard ReBirth first. Songs that need a mod's sounds, or aren't ReBirth 2.0 songs, are listed but greyed out.
+  - Shows each song's embedded title next to its file name, with ReBirth version, tempo and length. Click a column to sort, again to reverse.
+  - Search by title, file name or mod: every word you type has to match. Escape clears the search, a second Escape closes the library.
+  - Rate songs with up to five stars; click a row to open it (it keeps playing if the rack was playing); × removes a song.
+
 ## 0.4.0 — 2026-10-10
 
 ### New

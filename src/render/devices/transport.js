@@ -3,6 +3,7 @@ import { hits } from '../../ui/hits.js';
 import { click, release, repeat } from '../../ui/handlers.js';
 import { openAbout } from '../about.js';
 import { openAutomation } from '../automation.js';
+import { openLibrary } from '../library.js';
 import { Knob } from '../controls.js';
 import { drawLogo, LOGO_W } from '../logo.js';
 import { brushed, button, icon, lcd, led, MONO, panel, screws, sevenSeg, sevenSegWidth, text } from '../primitives.js';
@@ -127,26 +128,28 @@ export class Transport {
     const files = this.app.files;
     // OPEN and SAVE open system UI, so they fire on release (see `release`).
     const buttons = [
-      ['NEW', () => files.newSong(), click],
-      ['OPEN', () => files.pick(), release],
-      ['SAVE', () => files.save(), release],
+      ['NEW', 32, () => files.newSong(), click],
+      ['OPEN', 36, () => files.pick(), release],
+      ['SAVE', 36, () => files.save(), release],
+      ['LIBRARY', 46, () => openLibrary(state), click],
     ];
-    buttons.forEach(([label, fn, handler], i) => {
-      const bx = SONG_X + i * 46;
+    let bx = SONG_X;
+    for (const [label, bw, fn, handler] of buttons) {
       const key = `song.${label}`;
-      const off = button(ctx, bx, 47, 42, 15, { pressed: hits.isPressed(key) });
-      text(ctx, label, bx + 21, 55 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.6 });
-      hits.rect(ctx, bx, 47, 42, 15, handler(fn, key));
-    });
-    const lx = SONG_X + 3 * 46;
-    const off = button(ctx, lx, 47, 42, 15, { pressed: t.loop, face: t.loop ? C.btnPressed : C.btnDark });
-    icon(ctx, 'loop', lx + 11, 54.5 + off, 8, t.loop ? C.ledYellow : C.inkLight);
-    text(ctx, 'LOOP', lx + 27, 55 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.6 });
-    hits.rect(ctx, lx, 47, 42, 15, click(() => (t.loop = !t.loop)));
-    const ax = SONG_X + 4 * 46;
-    const aOff = button(ctx, ax, 47, 58, 15, { pressed: hits.isPressed('song.automation') });
-    text(ctx, 'AUTOMATION', ax + 29, 55 + aOff, { size: 5.6, weight: 800, color: C.inkLight, spacing: 0.4 });
-    hits.rect(ctx, ax, 47, 58, 15, click(() => openAutomation(state), 'song.automation'));
+      const off = button(ctx, bx, 47, bw, 15, { pressed: hits.isPressed(key) });
+      text(ctx, label, bx + bw / 2, 55 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.5 });
+      hits.rect(ctx, bx, 47, bw, 15, handler(fn, key));
+      bx += bw + 3;
+    }
+    const off = button(ctx, bx, 47, 38, 15, { pressed: t.loop, face: t.loop ? C.btnPressed : C.btnDark });
+    icon(ctx, 'loop', bx + 9, 54.5 + off, 8, t.loop ? C.ledYellow : C.inkLight);
+    text(ctx, 'LOOP', bx + 24, 55 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.5 });
+    hits.rect(ctx, bx, 47, 38, 15, click(() => (t.loop = !t.loop)));
+    const ax = bx + 41;
+    const aw = SONG_X + SONG_W - ax;
+    const aOff = button(ctx, ax, 47, aw, 15, { pressed: hits.isPressed('song.automation') });
+    text(ctx, 'AUTOMATION', ax + aw / 2, 55 + aOff, { size: 5.4, weight: 800, color: C.inkLight, spacing: 0.2 });
+    hits.rect(ctx, ax, 47, aw, 15, click(() => openAutomation(state), 'song.automation'));
   }
 
   nudgeButton(ctx, dir, y, sign) {

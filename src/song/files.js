@@ -13,6 +13,7 @@ export class Files {
     this.timer = 0;
   }
 
+  // Resolves true once the song is in the rack.
   async open(file) {
     try {
       const buffer = await file.arrayBuffer();
@@ -21,9 +22,11 @@ export class Files {
       applySession(this.state, session);
       if (!this.state.info.file) this.state.info.file = file.name;
       this.autosave();
-      this.onLoaded?.(this.state);
+      this.onLoaded?.(this.state, file);
+      return true;
     } catch (err) {
       this.onError?.(err, file);
+      return false;
     }
   }
 
@@ -72,15 +75,6 @@ export class Files {
     setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
-  // Drop .rbs/.json files anywhere on the page.
-  acceptDrops(target) {
-    target.addEventListener('dragover', (e) => e.preventDefault());
-    target.addEventListener('drop', (e) => {
-      e.preventDefault();
-      const file = e.dataTransfer?.files?.[0];
-      if (file) this.open(file);
-    });
-  }
 
   autosave() {
     clearTimeout(this.timer);

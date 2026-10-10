@@ -1,4 +1,4 @@
-@layer reset, base;
+@layer reset, base, components;
 
 @layer reset {
 
@@ -14,6 +14,9 @@
 @layer base {
   :root {
     --color-canvas: oklch(0.13 0.005 270);
+    /* The rack's green LCD text (theme.js lcdGreenOn / lcdGreenMid). */
+    --color-lcd-on: oklch(0.9 0.23 141);
+    --color-lcd-dim: oklch(0.72 0.16 141);
   }
 
   body {
@@ -27,5 +30,29 @@
   #rack {
     display: block;
     margin: auto;
+  }
+}
+
+@layer components {
+
+  /* A real text field laid over a box drawn on the canvas (touch keyboards,
+     paste, IME); main.js positions and sizes it every frame it's shown. */
+  .canvas-input {
+    position: absolute;
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0 0.4em;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--color-lcd-on);
+    caret-color: var(--color-lcd-on);
+    font-family: Menlo, 'SF Mono', Consolas, monospace;
+    font-weight: 700;
+  }
+
+  .canvas-input::placeholder {
+    color: var(--color-lcd-dim);
+    opacity: 0.7;
   }
 }
