@@ -6,7 +6,7 @@ import { openAutomation } from '../automation.js';
 import { openLibrary } from '../library.js';
 import { Knob } from '../controls.js';
 import { drawLogo, LOGO_W } from '../logo.js';
-import { brushed, button, icon, lcd, led, MONO, panel, screws, sevenSeg, sevenSegWidth, text } from '../primitives.js';
+import { brushed, button, icon, lcd, led, MONO, panel, px, rgba, rrect, screws, sevenSeg, sevenSegWidth, text } from '../primitives.js';
 import { C, KNOB } from '../theme.js';
 
 const LABEL = { size: 6, color: C.inkMuted, spacing: 1 };
@@ -113,9 +113,11 @@ export class Transport {
     const { info, song, transport: t } = state;
     text(ctx, 'SONG', SONG_X, 12, { ...LABEL, align: 'left' });
     lcd(ctx, SONG_X, 19, SONG_W, 22, C.lcdGreen);
+    this.drawProgress(ctx);
     const name = (info.title || info.file || 'UNTITLED').toUpperCase();
     const fit = name.length > 40 ? `${name.slice(0, 39)}\u2026` : name;
-    text(ctx, fit, SONG_X + 5, 25.5, { size: 6.5, weight: 700, family: MONO, align: 'left', color: C.lcdGreenOn });
+    const halo = C.lcdGreen[0];
+    text(ctx, fit, SONG_X + 5, 25.5, { size: 6.5, weight: 700, family: MONO, align: 'left', color: C.lcdGreenOn, halo });
     const bars = songBars(song);
     const status = bars
       ? `${t.mode === 'song' ? 'SONG' : 'PATTERN'} MODE \u00B7 ${bars} BARS${t.loop ? ` \u00B7 LOOP ${song.loopStart / TICKS_PER_BAR + 1}-${song.loopEnd / TICKS_PER_BAR}` : ''}`
@@ -124,7 +126,7 @@ export class Transport {
         : 'PATTERN MODE \u00B7 NO SONG';
     const notice = state.notice && performance.now() < state.notice.until ? state.notice.text : null;
     const line2 = notice ? (notice.length > 52 ? `${notice.slice(0, 51)}\u2026` : notice) : status;
-    text(ctx, line2, SONG_X + 5, 34.5, { size: 5.5, family: MONO, align: 'left', color: notice ? C.lcdGreenOn : C.lcdGreenMid });
+    text(ctx, line2, SONG_X + 5, 34.5, { size: 5.5, family: MONO, align: 'left', color: notice ? C.lcdGreenOn : C.lcdGreenMid, halo });
 
     const files = this.app.files;
     // OPEN and SAVE open system UI, so they fire on release (see `release`).
@@ -164,6 +166,46 @@ export class Transport {
     text(ctx, 'PATTERNS', x + 28, 37 + off, { size: 6, weight: 800, color: C.inkLight, spacing: 0.3 });
     text(ctx, 'FOCUS', x + 28, 61, LABEL);
     hits.rect(ctx, x, 24, 56, 26, click(() => (this.state.ui.stage = 'patterns'), key));
+  }
+
+  // Song mode: the played part of the song display lit faintly, a progress
+  // line along its bottom with the loop range marked, and the whole display a
+  // scrubber: click or drag across it to jump there (to the bar).
+  drawProgress(ctx) {
+    const { state, app } = this;
+    const { song, transport: t } = state;
+    if (t.mode !== 'song' || !song.length) return;
+    const [x, y, w, h] = [SONG_X, 19, SONG_W, 22];
+    const X = (tick) => x + (Math.min(song.length, Math.max(0, tick)) / song.length) * w;
+    const tick = (t.bar - 1) * TICKS_PER_BAR + Math.max(0, t.step) * 2;
+    const px0 = X(tick);
+    ctx.save();
+    rrect(ctx, x, y, w, h, 2);
+    ctx.clip();
+    ctx.fillStyle = rgba(C.lcdGreenOn, 0.09);
+    ctx.fillRect(x, y, px0 - x, h);
+    const ly = y + h - 2.5;
+    ctx.fillStyle = rgba(C.lcdGreenOn, 0.15);
+    ctx.fillRect(x, ly, w, 2);
+    if (t.loop && song.loopEnd > song.loopStart) {
+      ctx.fillStyle = rgba(C.ledYellow, 0.45);
+      ctx.fillRect(X(song.loopStart), ly, X(song.loopEnd) - X(song.loopStart), 2);
+    }
+    ctx.fillStyle = C.lcdGreenOn;
+    ctx.fillRect(x, ly, px0 - x, 2);
+    ctx.fillStyle = rgba(C.lcdGreenOn, 0.35);
+    ctx.fillRect(px0 - px(0.5), y, px(1), ly - y);
+    ctx.restore();
+
+    const bars = songBars(song);
+    const seek = (ev) => app.clock.seekTo(Math.min(bars, Math.max(1, Math.floor(((ev.p.x - x) / w) * bars) + 1)));
+    hits.rect(ctx, x, y, w, h, {
+      cursor: 'ew-resize',
+      down: (ev) => {
+        seek(ev);
+        return { move: seek };
+      },
+    });
   }
 
   nudgeButton(ctx, dir, y, sign) {

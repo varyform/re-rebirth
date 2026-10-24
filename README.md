@@ -81,6 +81,7 @@ Everything has a key, and <kbd>/</kbd> lists the ones that work where you are, i
 | Drop a `.rbs` / `.json` file | Open it |
 | Drag a knob up/down, or scroll | Turn it; hold <kbd>Shift</kbd> for fine steps, double-click to reset |
 | Hold REW / FF | Seek, faster the longer you hold |
+| Click or drag the SONG display (song mode) | Jump to that point in the song |
 | Shift-click a Drum 09 step | Cycle on → accent → flam → off |
 | <kbd>/</kbd> | **Every shortcut that works where you are** (the full list) |
 | <kbd>1</kbd>–<kbd>5</kbd> | RACK, PATTERNS, ARRANGE, AUTOMATE, MIX |

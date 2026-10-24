@@ -56,18 +56,24 @@ function font({ size = 7, weight = 700, italic = false, family = FONT }) {
 }
 
 export function text(ctx, s, x, y, opts = {}) {
-  const { color = C.inkLight, align = 'center', baseline = 'middle', spacing = 0 } = opts;
+  const { color = C.inkLight, align = 'center', baseline = 'middle', spacing = 0, halo } = opts;
   ctx.font = font(opts);
   ctx.fillStyle = color;
   ctx.textAlign = align;
   ctx.textBaseline = baseline;
-  if (spacing && 'letterSpacing' in ctx) {
-    ctx.letterSpacing = `${spacing}px`;
-    ctx.fillText(s, x, y);
-    ctx.letterSpacing = '0px';
-  } else {
-    ctx.fillText(s, x, y);
+  if (spacing && 'letterSpacing' in ctx) ctx.letterSpacing = `${spacing}px`;
+  // halo: a stroke behind the glyphs, to keep type readable over marks drawn
+  // underneath it (in user units, not line units).
+  if (halo) {
+    ctx.save();
+    ctx.strokeStyle = halo;
+    ctx.lineJoin = 'round';
+    shapeWidth(ctx, 2);
+    ctx.strokeText(s, x, y);
+    ctx.restore();
   }
+  ctx.fillText(s, x, y);
+  if (spacing && 'letterSpacing' in ctx) ctx.letterSpacing = '0px';
 }
 
 // Includes letter spacing, as `text` draws it.
