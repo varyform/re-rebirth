@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1 — 2026-10-24
 
 ### New
 - **Song progress in the rack:** in song mode the SONG display fills as the song plays, with a line along its bottom showing where you are (and the loop, in yellow, when it's on). Click or drag across the display to jump to that bar.
