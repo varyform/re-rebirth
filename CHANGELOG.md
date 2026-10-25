@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Bass lines no longer play notes ReBirth leaves silent:** in ReBirth songs, a step after a rest that carries a slide was read as a held note and played. It's a rest, as in ReBirth. Heard in TGV's KiloMix '98 (bass line 1 from bar 65), Voodoo Ray and a few other songs.
+
 ## 0.7.1 — 2026-10-24
 
 ### New
