@@ -22,7 +22,7 @@ const COPY = {
   export: 'EXPORT',
   midi: 'MIDI',
   learn: 'LEARN',
-  keys: (oct) => `A\u2013K NOTES \u00B7 Z X OCTAVE ${oct > 0 ? '+' : ''}${oct} \u00B7 \u21E7 ACCENT \u00B7 TAB SLIDE \u00B7 \u232B REST`,
+  keys: (oct) => `A\u2013K NOTES \u00B7 Z X OCTAVE ${oct > 0 ? '+' : ''}${oct} \u00B7 \u21E7 ACCENT \u00B7 TAB SLIDE \u00B7 \u232B REST \u00B7 SLIDE + REST HOLDS (\u2040)`,
   liveRec: (on) => (on ? ' \u00B7 \u25CF RECORDING MIDI KEYS (R)' : ' \u00B7 R RECORDS MIDI KEYS'),
 };
 const TAB = { size: 6.5, weight: 800, spacing: 0.3 };

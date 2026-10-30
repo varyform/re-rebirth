@@ -9,6 +9,7 @@
   - Chains play in pattern mode (PATTERNS, or the rack in PATTERN mode); song mode plays the song. They're kept in Re-Rebirth's own session files; a `.rbs` has no room for them, and saving one says so.
 
 ### Changed
+- **Held notes show as you make them:** a rest right after a note with SLIDE holds that note (that's how ReBirth stores held notes), and its step now shows ⁀ straight away, lit like a note. It used to show as a rest until the song was saved and opened again. The PATTERNS hint says so: SLIDE + REST HOLDS. The pattern picker's piano rolls draw these held notes too.
 - ARRANGE's toolbar buttons (DUPLICATE, DELETE, INSERT, UNDO, FIT) are now the same size as AUTOMATE's, and the song's rows get the room they gave up.
 
 ## 0.9.2 — 2026-10-30

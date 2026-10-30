@@ -5,7 +5,7 @@
 // adds patterns to a chain the machine plays in turn (pattern mode; state.js),
 // shown in the header with the one playing lit. The rail stays beside it, so
 // another machine is one click away.
-import { HIT } from '../../state.js';
+import { heldSteps, HIT } from '../../state.js';
 import { hits } from '../../ui/hits.js';
 import { click } from '../../ui/handlers.js';
 import { button, panel, px, rgba, rrect, text, textWidth, vgrad } from '../primitives.js';
@@ -179,23 +179,24 @@ export class PatternPicker {
     const Y = (p) => y + h - ((p - LOW) / (HIGH - LOW)) * (h - noteH) - noteH;
     let any = false;
     let prev = null; // { pitch, accent } of the note sounding
+    const held = heldSteps(pattern);
     steps.forEach((s, i) => {
-      if (!s.gate) {
+      if (!s.gate && !held[i]) {
         prev = null;
         return;
       }
       any = true;
-      const tie = s.tie && prev;
+      const tie = held[i] && prev;
       const pitch = tie ? prev.pitch : s.note + s.octave * 12;
       const accent = tie ? prev.accent : s.accent;
       // A held or sliding note runs into the next step without a gap.
-      const joined = s.slide || steps[i + 1]?.tie;
+      const joined = s.slide || held[i + 1];
       const start = x + i * stepW + (tie ? 0 : stepW * 0.1);
       const end = x + (i + 1) * stepW - (joined ? 0 : stepW * 0.1);
       ctx.fillStyle = accent ? C.bassNoteAccent : C.bassNote;
       ctx.fillRect(start, Y(pitch), end - start, noteH);
       const next = steps[i + 1];
-      if (s.slide && next?.gate && !next.tie) {
+      if (s.slide && next?.gate && !next.tie && !held[i + 1]) {
         ctx.strokeStyle = rgba(C.bassNote, 0.7);
         ctx.lineWidth = 1;
         ctx.beginPath();

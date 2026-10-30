@@ -1,3 +1,4 @@
+import { heldSteps } from '../../state.js';
 import { hits } from '../../ui/hits.js';
 import { click, paintSteps, scrubSteps, toggle } from '../../ui/handlers.js';
 import { drawPatternTools, Knob, PatternSelector } from '../controls.js';
@@ -252,6 +253,7 @@ export class Bassline {
 
     const t = state.transport;
     const playhead = t.playing ? (t.positions[id] ?? -1) : -1;
+    const held = heldSteps(pattern);
     steps.forEach((s, i) => {
       const cx = GRID_X + i * STEP_W + STEP_W / 2;
       // Steps past the pattern length don't play: dim them.
@@ -268,8 +270,9 @@ export class Bassline {
       rrect(ctx, cx - cellW / 2, NOTE_TOP, cellW, cellH, 1.5);
       ctx.fillStyle = C.bassCell;
       ctx.fill();
-      const noteColor = !s.gate ? C.bassNoteOff : s.accent ? C.bassNoteAccent : C.bassNote;
-      const label = !s.gate ? '\u2013' : s.tie ? '\u2040' : NOTE_NAMES[s.note]; // ⁀ = tie
+      // ⁀: holds the note before it (SLIDE + rest), lit like a note.
+      const noteColor = held[i] ? C.bassNote : !s.gate ? C.bassNoteOff : s.accent ? C.bassNoteAccent : C.bassNote;
+      const label = held[i] ? '\u2040' : !s.gate || s.tie ? '\u2013' : NOTE_NAMES[s.note];
       text(ctx, label, cx, ROW.note + 0.5, { size: 7.5 * tz, weight: 700, family: MONO, color: noteColor });
 
       if (s.octave) icon(ctx, s.octave > 0 ? 'up' : 'down', cx, ROW.oct, 7 * tz, s.gate ? C.bassNote : C.bassNoteOff);

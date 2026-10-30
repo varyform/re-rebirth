@@ -14,6 +14,26 @@ export const HIT = { off: 0, on: 1, accent: 2, flam: 3 };
 // tie: sustain the previous (slid) note through this step instead of playing a new one.
 export const emptyBassStep = () => ({ note: 0, octave: 0, accent: false, slide: false, gate: false, tie: false });
 export const emptyBassPattern = () => ({ length: STEPS, shuffle: false, steps: Array.from({ length: STEPS }, emptyBassStep) });
+
+// Which steps hold the note before them (a tie, shown ⁀): a rest right after a
+// sounding step with SLIDE, as ReBirth stores held notes. Worked out from the
+// steps, so SLIDE + rest shows as held the moment it's made. Chains: a held
+// step with SLIDE holds on into the next rest. The pattern loops, so it goes
+// round twice for holds over its end.
+export function heldSteps(pattern) {
+  const { steps, length: n } = pattern;
+  const rest = (s) => !s.gate || s.tie;
+  const sounding = steps.map((s) => !rest(s));
+  const held = steps.map(() => false);
+  for (let k = 0; k < 2 * n; k++) {
+    const i = k % n;
+    if (!rest(steps[i])) continue;
+    const prev = (i + n - 1) % n;
+    held[i] = !!steps[prev].slide && sounding[prev];
+    sounding[i] = held[i];
+  }
+  return held;
+}
 export const emptyDrumPattern = () => ({ length: STEPS, shuffle: false, tracks: {} });
 
 export class State {
