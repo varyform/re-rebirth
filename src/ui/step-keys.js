@@ -55,10 +55,13 @@ export function stepKey(e, state, engine) {
       Object.assign(step, { gate: false, tie: false, accent: false, slide: false });
       move(1);
       return true;
+    // Shift + arrows shift the whole pattern (ui/shortcuts.js).
     case 'ArrowLeft':
+      if (e.shiftKey) return false;
       move(-1);
       return true;
     case 'ArrowRight':
+      if (e.shiftKey) return false;
       move(1);
       return true;
   }

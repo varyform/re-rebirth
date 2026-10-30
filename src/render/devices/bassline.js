@@ -141,6 +141,7 @@ export class Bassline {
     for (const k of this.knobs) k.draw(ctx, state);
     this.selector.draw(ctx);
     this.drawSequencer(ctx);
+    this.drawHint(ctx);
     screws(ctx, w, h);
   }
 
@@ -160,16 +161,21 @@ export class Bassline {
     text(ctx, 'ON', tx + 30, 9.5, { size: 6, align: 'left', color: C.inkMuted });
     hits.rect(ctx, tx + 19, 2, 26, 14, toggle(state, this.onParam));
     const left = drawPatternTools(ctx, { state, id: this.id, right: w - 10, led: C.ledRed });
-    if (!this.subtitle) {
-      text(ctx, 'ANALOG BASS SYNTHESIZER', tx + 52, 9.5, { size: 6, align: 'left', color: C.inkMuted, spacing: 1.2 });
-      return;
-    }
-    // A hint gets the room up to the pattern tools, smaller if it must.
+    const name = 'ANALOG BASS SYNTHESIZER';
+    const nameOpts = { size: 6, align: 'left', color: C.inkMuted, spacing: 1.2 };
+    if (!this.subtitle && left - 10 > tx + 52 + textWidth(ctx, name, nameOpts)) text(ctx, name, tx + 52, 9.5, nameOpts);
+  }
+
+  // The typing hint (PATTERNS), in the band between the step grid and the keyboard:
+  // the header is full of pattern tools.
+  drawHint(ctx) {
+    if (!this.subtitle) return;
+    const { L, w } = this;
     const hint = this.subtitle();
     const opts = { size: 6, weight: 700, align: 'left', color: C.bassNote, spacing: 0.2 };
-    const fit = (left - 10 - (tx + 52)) / textWidth(ctx, hint, opts);
-    if (fit < 1) opts.size *= Math.max(0.6, fit);
-    text(ctx, hint, tx + 52, 9.5, opts);
+    const fit = (w - 2 * L.labelX) / textWidth(ctx, hint, opts);
+    if (fit < 1) opts.size *= fit;
+    text(ctx, hint, L.labelX, (L.gridBottom + L.keyboard[1]) / 2 + 1, opts);
   }
 
   drawWaveSwitch(ctx, cx, cy) {

@@ -164,6 +164,10 @@ export class Clock {
       if (this.songMode) this.player.chase(0);
       return;
     }
+    if (type === 'patternEdit') {
+      this.player.checkpointPattern(d);
+      return;
+    }
     if (type !== 'param' || d.source !== 'user' || !this.recording || UNRECORDED.test(d.key)) return;
     // Moves before the scheduler has started this take's first pass.
     if (!this.player.inPass) this.player.startPass(this.heardTick());

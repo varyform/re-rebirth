@@ -8,6 +8,7 @@ import { R808, R909 } from '../render/devices/drum-machine.js';
 import { openExport } from '../render/export.js';
 import { shownDevices } from '../render/focus-view.js';
 import { deleteBars, duplicateBars, insertBars } from '../song/arrange-ops.js';
+import { doublePattern, reversePattern, shiftPattern, transposePattern } from '../song/pattern-ops.js';
 import { BASS_IDS, DRUM_IDS } from '../state.js';
 import { STAGES } from '../render/devices/stage-bar.js';
 
@@ -113,8 +114,28 @@ export function shortcutGroups(state, app) {
           },
         })),
         { keys: '\u21E7 + LANE KEY', label: 'Play it accented' },
-        { keys: '\u2190 \u2192', label: 'Select the previous / next lane', test: key('ArrowLeft'), run: () => stepLane(state, -1) },
-        { test: key('ArrowRight'), run: () => stepLane(state, 1) },
+        { keys: '\u2190 \u2192', label: 'Select the previous / next lane', test: key('ArrowLeft', { shift: false }), run: () => stepLane(state, -1) },
+        { test: key('ArrowRight', { shift: false }), run: () => stepLane(state, 1) },
+      ],
+    });
+  }
+
+  if (ui.stage === 'patterns' && !ui.picker) {
+    groups.push({
+      title: 'PATTERNS \u00B7 PATTERN TOOLS',
+      items: [
+        { keys: '\u21E7 \u2190 \u2192', label: 'Shift the pattern a step left / right', test: key('ArrowLeft', { shift: true }), run: () => shiftPattern(state, id, -1) },
+        { test: key('ArrowRight', { shift: true }), run: () => shiftPattern(state, id, 1) },
+        ...(bassShown(state)
+          ? [
+            { keys: '\u21E7 \u2191 \u2193', label: 'Transpose a semitone up / down', test: key('ArrowUp', { shift: true }), run: () => transposePattern(state, id, 1) },
+            { test: key('ArrowDown', { shift: true }), run: () => transposePattern(state, id, -1) },
+            { keys: '\u2318/CTRL \u21E7 \u2191 \u2193', label: 'Transpose an octave up / down', test: key('ArrowUp', { withMod: true, shift: true }), run: () => transposePattern(state, id, 12) },
+            { test: key('ArrowDown', { withMod: true, shift: true }), run: () => transposePattern(state, id, -12) },
+          ]
+          : []),
+        { keys: '\u21E7 R', label: 'Reverse the pattern', test: key('KeyR', { shift: true }), run: () => reversePattern(state, id) },
+        { keys: '\u2318/CTRL D', label: 'Double the pattern (steps 1\u20138 repeated on 9\u201316)', test: key('KeyD', { withMod: true }), run: () => doublePattern(state, id) },
       ],
     });
   }
@@ -167,9 +188,9 @@ export function shortcutGroups(state, app) {
         { test: key('ArrowLeft', { shift: true }), run: () => clock.seekBar(-4) },
         { test: key('ArrowRight', { shift: true }), run: () => clock.seekBar(4) },
         { keys: 'HOME', label: 'To the start', test: key('Home'), run: () => clock.seekTo(1) },
-        { keys: '\u2318/CTRL Z', label: 'Undo the last pass or edit', test: key('KeyZ', { withMod: true, shift: false }), run: () => clock.undoPass() },
       ]
       : []),
+    { keys: '\u2318/CTRL Z', label: 'Undo the last pass or edit', test: key('KeyZ', { withMod: true, shift: false }), run: () => clock.undoPass() },
   ];
   groups.push({ title: 'TRANSPORT', items: transport });
 

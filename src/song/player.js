@@ -71,7 +71,16 @@ export class SongPlayer {
 
   // Before an arrangement edit: the song as it is, for UNDO (shared with passes).
   checkpoint() {
-    this.undoStack.push(snapshotOf(this.song));
+    this.pushUndo(snapshotOf(this.song));
+  }
+
+  // After a pattern tool rewrote a pattern: the pattern as it was.
+  checkpointPattern({ id, index, before }) {
+    this.pushUndo({ pattern: { id, index, before } });
+  }
+
+  pushUndo(entry) {
+    this.undoStack.push(entry);
     if (this.undoStack.length > UNDO_DEPTH) this.undoStack.shift();
   }
 
@@ -151,6 +160,11 @@ export class SongPlayer {
     if (this.inPass && this.dirty) snap = this.snapshot;
     else snap = this.undoStack.pop();
     if (!snap) return false;
+    if (snap.pattern) {
+      const { id, index, before } = snap.pattern;
+      this.state.device(id).patterns[index] = before;
+      return true;
+    }
     // A fresh object, so views caching per song see the change.
     this.state.song = structuredClone(snap);
     this.overrides.clear();

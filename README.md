@@ -97,6 +97,8 @@ Everything has a key, and <kbd>/</kbd> lists the ones that work where you are, i
 | PATTERNS, bass shown: <kbd>A</kbd> <kbd>W</kbd> <kbd>S</kbd> … <kbd>K</kbd> | Write a note (C to C) on the selected step and move on; <kbd>Shift</kbd> adds accent |
 | PATTERNS, bass shown: <kbd>Z</kbd> / <kbd>X</kbd>, <kbd>Tab</kbd>, <kbd>⌫</kbd> | Octave down/up, slide into the next note, rest |
 | PATTERNS, drums shown: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> … <kbd>'</kbd> | Play a lane and select it; <kbd>Shift</kbd> accents |
+| PATTERNS: <kbd>Shift</kbd> <kbd>←</kbd> <kbd>→</kbd>, <kbd>Shift</kbd> <kbd>R</kbd>, <kbd>⌘/Ctrl</kbd> <kbd>D</kbd> | Shift the pattern a step, reverse it, double it |
+| PATTERNS, bass shown: <kbd>Shift</kbd> <kbd>↑</kbd> <kbd>↓</kbd> (with <kbd>⌘/Ctrl</kbd>: an octave) | Transpose the bass line a semitone |
 
 ## Song compatibility
 

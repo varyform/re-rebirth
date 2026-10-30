@@ -4,6 +4,14 @@
 
 ### New
 - **Songs made for ReBirth mods open now,** instead of being refused. A mod only swaps in its own drum samples and graphics, so these songs play with the standard drums: their bass lines, patterns, mixer and automation are all there. Opening one says which mod it was made for, the library lists them as playable under their mod, and saving one as `.rbs` keeps the mod's name, so ReBirth plays it with the mod again. About half the songs in the ReBirth archives were made for a mod.
+- **More pattern tools** in every instrument's header, next to COPY, PASTE, CLEAR and RANDOM:
+  - SHIFT ◂ ▸ moves the whole pattern a step left or right, wrapping around.
+  - REV plays it backwards. A held bass note stays a held note, and slides stay between the same two notes.
+  - ×2 repeats the pattern after itself and doubles its length (an 8-step pattern becomes 16), ready to vary the second half.
+  - TRANSP ◂ ▸ moves a bass line a semitone down or up; Shift-click for an octave. It won't push notes past the 303's range.
+  - In PATTERNS: Shift ← → shifts, Shift R reverses, ⌘/Ctrl D doubles, Shift ↑ ↓ transposes (⌘/Ctrl Shift ↑ ↓ an octave).
+  - ⌘/Ctrl Z undoes them, and CLEAR, PASTE and RANDOM too. Undo now works in PATTERNS as well.
+- The typing hint in PATTERNS sits under the step grid, where it has room.
 
 ## 0.8.5 — 2026-10-30
 

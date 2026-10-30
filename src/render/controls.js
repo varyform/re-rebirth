@@ -1,6 +1,18 @@
 // Controls own their geometry (in device-local units) and a state binding, and
 // register their own hit regions while drawing.
-import { canPaste, clearPattern, copyPattern, pastePattern, randomizePattern, setLength } from '../song/pattern-ops.js';
+import {
+  canPaste,
+  clearPattern,
+  copyPattern,
+  doublePattern,
+  pastePattern,
+  randomizePattern,
+  reversePattern,
+  setLength,
+  shiftPattern,
+  transposePattern,
+} from '../song/pattern-ops.js';
+import { BASS_IDS, STEPS } from '../state.js';
 import { hits } from '../ui/hits.js';
 import { click, knobDrag } from '../ui/handlers.js';
 import { button, circle, icon, knob, lcd, led, rgba, rrect, sevenSeg, sevenSegWidth, text, textWidth } from './primitives.js';
@@ -118,6 +130,28 @@ export class PatternSelector {
 
 const TOOL = { size: 5.5, weight: 800, spacing: 0.4 };
 const TOOL_H = 12;
+const TOOL_COPY = {
+  shift: 'SHIFT',
+  transpose: 'TRANSP',
+  reverse: 'REV',
+  double: '\u00D72',
+};
+
+// A label with ◂ ▸ nudge buttons after it, ending at `right`; returns its left edge.
+// The handlers get -1 / 1 and the pointer event.
+function drawNudges(ctx, { right, y, label, keyBase, fn }) {
+  let x = right - 22;
+  for (const [dx, dir, d] of [[0, 'left', -1], [12, 'right', 1]]) {
+    const key = `${keyBase}.${dir}`;
+    const off = button(ctx, x + dx, y, 10, TOOL_H, { pressed: hits.isPressed(key) });
+    icon(ctx, dir, x + dx + 5, y + TOOL_H / 2 + off, 5, C.inkLight);
+    hits.rect(ctx, x + dx, y, 10, TOOL_H, click((ev) => fn(d, ev), key));
+  }
+  const lw = label.length * 4.2;
+  x -= lw + 3;
+  text(ctx, label, x, 9.5, { size: 5.5, align: 'left', color: C.inkMuted, spacing: 0.6 });
+  return x;
+}
 
 // Pattern length + edit operations + per-pattern shuffle, in a device header.
 // Laid out right-to-left from `right`; returns the left edge it reached.
@@ -136,6 +170,8 @@ export function drawPatternTools(ctx, { state, id, right, led: ledColor }) {
     ['CLEAR', () => clearPattern(state, id)],
     ['PASTE', () => pastePattern(state, id), !canPaste(id)],
     ['COPY', () => copyPattern(state, id)],
+    [TOOL_COPY.double, () => doublePattern(state, id), pattern.length * 2 > STEPS],
+    [TOOL_COPY.reverse, () => reversePattern(state, id)],
   ];
   for (const [label, fn, disabled] of ops) {
     const bw = label.length * 4.4 + 8;
@@ -144,6 +180,13 @@ export function drawPatternTools(ctx, { state, id, right, led: ledColor }) {
     const off = button(ctx, x, y, bw, TOOL_H, { pressed: hits.isPressed(key) });
     text(ctx, label, x + bw / 2, y + TOOL_H / 2 + 0.5 + off, { ...TOOL, color: disabled ? C.inkMuted : C.inkLight });
     if (!disabled) hits.rect(ctx, x, y, bw, TOOL_H, click(fn, key));
+  }
+
+  x = drawNudges(ctx, { right: x - 6, y, label: TOOL_COPY.shift, keyBase: `${id}.shift`, fn: (d) => shiftPattern(state, id, d) }) - 2;
+  // Transpose by a semitone; Shift-click: an octave.
+  if (BASS_IDS.includes(id)) {
+    const fn = (d, ev) => transposePattern(state, id, ev.fine ? d * 12 : d);
+    x = drawNudges(ctx, { right: x - 4, y, label: TOOL_COPY.transpose, keyBase: `${id}.transpose`, fn }) - 2;
   }
 
   // Length: ◂ nn ▸
