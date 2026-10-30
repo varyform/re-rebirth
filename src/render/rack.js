@@ -4,12 +4,12 @@ import { ChannelStrip, STRIP_W } from './devices/channel-strip.js';
 import { DrumMachine, R808, R909 } from './devices/drum-machine.js';
 import { EffectsColumn } from './devices/effects.js';
 import { Transport } from './devices/transport.js';
-import { hgrad, line, rrect } from './primitives.js';
+import { drawRackRail, RACK_RAIL_W as RAIL_W } from './rack-rail.js';
 import { C } from './theme.js';
 import { drawWindows } from './windows.js';
 
-const RAIL_W = 14;
 const MARGIN = 4;
+export const RACK_MARGIN = MARGIN; // above the transport and below the last row
 const TRANSPORT_H = 72;
 const BASS_H = 156;
 // Drum 08 is taller: its single-column knob groups stack three knobs deep.
@@ -80,8 +80,8 @@ export class Rack {
   draw(ctx) {
     ctx.fillStyle = C.rackBg;
     ctx.fillRect(0, 0, this.width, this.height);
-    this.drawRail(ctx, 0);
-    this.drawRail(ctx, this.width - RAIL_W);
+    drawRackRail(ctx, 0, this.height);
+    drawRackRail(ctx, this.width - RAIL_W, this.height);
     for (const d of this.devices) {
       ctx.save();
       ctx.translate(d.x, d.y);
@@ -89,22 +89,5 @@ export class Rack {
       ctx.restore();
     }
     drawWindows(ctx, this.width, this.height, this.state, this.app);
-  }
-
-  drawRail(ctx, x) {
-    const h = this.height;
-    ctx.fillStyle = hgrad(ctx, x, x + RAIL_W, C.rail);
-    ctx.fillRect(x, 0, RAIL_W, h);
-    ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-    line(ctx, x + 0.5, 0, x + 0.5, h);
-    line(ctx, x + RAIL_W - 0.5, 0, x + RAIL_W - 0.5, h);
-    for (let y = 10; y < h - 10; y += 22) {
-      rrect(ctx, x + 4, y, RAIL_W - 8, 8, 2);
-      ctx.fillStyle = C.railHole;
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(255,255,255,0.18)';
-      line(ctx, x + 5, y + 8.6, x + RAIL_W - 5, y + 8.6);
-    }
   }
 }

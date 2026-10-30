@@ -13,8 +13,8 @@ const RECENT = 2; // seconds of scheduled steps kept for nearestStep
 const INTERVAL = 25; // ms between scheduler runs
 const START_DELAY = 0.05;
 
-// Song-file controls only; local monitoring (mute/solo, master) isn't recorded.
-const UNRECORDED = /^(master\.|song\.|mixer\.(master|delayReturn)|mixer\.\w+\.(mute|solo))/;
+// Song-file controls only; local monitoring (mute, master) isn't recorded.
+const UNRECORDED = /^(master\.|song\.|mixer\.(master|delayReturn)|mixer\.\w+\.mute)/;
 
 export class Clock {
   constructor(state, engine) {

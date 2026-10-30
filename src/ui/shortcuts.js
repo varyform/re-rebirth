@@ -11,6 +11,7 @@ import { shownDevices } from '../render/focus-view.js';
 import { deleteBars, duplicateBars, insertBars } from '../song/arrange-ops.js';
 import { doublePattern, reversePattern, shiftPattern, transposePattern } from '../song/pattern-ops.js';
 import { BASS_IDS, DRUM_IDS } from '../state.js';
+import { toggleSolo } from '../channels.js';
 import { STAGES } from '../render/devices/stage-bar.js';
 
 const KITS = { r808: R808, r909: R909 };
@@ -178,7 +179,7 @@ export function shortcutGroups(state, app) {
       { test: key('BracketRight'), run: () => stepPattern(state, 1) },
       { keys: 'P', label: 'Pattern picker', test: key('KeyP'), run: () => (ui.picker = true) },
       { keys: 'M', label: 'Instrument on / off', test: key('KeyM', { shift: false }), run: () => state.toggle(`${id}.on`) },
-      { keys: '\u21E7 M', label: 'Solo the instrument (listening only)', test: key('KeyM', { shift: true }), run: () => state.toggle(`mixer.${id}.solo`) },
+      { keys: '\u21E7 M', label: 'Solo: only this instrument on (again: the others back)', test: key('KeyM', { shift: true }), run: () => toggleSolo(state, id) },
     ];
     groups.push({ title: 'INSTRUMENT', items });
   }

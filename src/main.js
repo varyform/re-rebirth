@@ -4,7 +4,8 @@ import { loadDemo } from './demo.js';
 import { addedMessage, closeLibrary, openLibrary, SEARCH_PLACEHOLDER } from './render/library.js';
 import { closeSongInfo, fitField, INFO_FIELDS } from './render/song-info.js';
 import { setLineScale, thinLines } from './render/primitives.js';
-import { Rack } from './render/rack.js';
+import { Rack, RACK_H, RACK_MARGIN, RACK_W } from './render/rack.js';
+import { RACK_RAIL_W } from './render/rack-rail.js';
 
 import { viewClass, viewKey } from './render/views.js';
 import { Midi } from './midi.js';
@@ -183,13 +184,18 @@ function animate() {
 // A view's chrome (`chrome` units tall above the devices, `chromeLeft` wide
 // beside them) is scaled to fit the view's `reference` layout (chrome
 // included), so it keeps one size on screen while the devices change; the
-// devices fit the room left.
+// devices fit the room left. `chromeSize` scales the chrome down from that fit.
+// A view with `rackFrame` gets the rack's metal rails and top/bottom margins at
+// the scale the rack would have in this window, and lays out inside them.
 function resize() {
-  const W = window.innerWidth;
-  const H = window.innerHeight;
   const View = viewClass(state);
-  const { min, stretch, chrome = 0, chromeLeft = 0, chromeW = 0, minScale = 1, reference = { w: min.w + chromeLeft, h: min.h + chrome } } = View.size(state);
-  const chromeFit = Math.max(minScale, Math.min(W / reference.w, H / reference.h));
+  const { min, stretch, chrome = 0, chromeLeft = 0, chromeW = 0, minScale = 1, chromeSize = 1, rackFrame = false, reference = { w: min.w + chromeLeft, h: min.h + chrome } } = View.size(state);
+  const rackScale = Math.max(1, Math.min(window.innerWidth / RACK_W, window.innerHeight / RACK_H));
+  const fx = rackFrame ? RACK_RAIL_W * rackScale : 0; // CSS pixels
+  const fy = rackFrame ? RACK_MARGIN * rackScale : 0;
+  const W = window.innerWidth - fx * 2;
+  const H = window.innerHeight - fy * 2;
+  const chromeFit = Math.max(minScale, Math.min(W / reference.w, H / reference.h)) * chromeSize;
   const freeW = W - chromeLeft * chromeFit;
   const free = H - chrome * chromeFit;
   const scale = Math.max(minScale, Math.min(freeW / min.w, free / min.h));
@@ -198,10 +204,12 @@ function resize() {
   const floorW = Math.max(min.w, (chromeW - chromeLeft) * k);
   // Fractional on purpose: a view that fills the window then measures exactly
   // W x H CSS pixels, whatever its scale.
-  const width = Math.min(Math.max(min.w * stretch.w, floorW), Math.max(floorW, freeW / scale)) + chromeLeft * k;
-  const height = Math.min(min.h * stretch.h, Math.max(min.h, free / scale)) + chrome * k;
-  const stale = width !== view.width || height !== view.height || viewKey(state) !== view.key || (chrome && k !== view.chromeScale);
-  if (stale) view = new View(state, app, width, height, k);
+  const frame = { x: fx / scale, y: fy / scale };
+  const width = Math.min(Math.max(min.w * stretch.w, floorW), Math.max(floorW, freeW / scale)) + chromeLeft * k + frame.x * 2;
+  const height = Math.min(min.h * stretch.h, Math.max(min.h, free / scale)) + chrome * k + frame.y * 2;
+  const framed = view.frame?.x === frame.x && view.frame?.y === frame.y;
+  const stale = width !== view.width || height !== view.height || viewKey(state) !== view.key || (chrome && k !== view.chromeScale) || (rackFrame && !framed);
+  if (stale) view = new View(state, app, width, height, k, frame);
   viewScale = scale;
   chromeScale = chromeFit;
   // The epsilon keeps float error (1439.9999) from losing a pixel.

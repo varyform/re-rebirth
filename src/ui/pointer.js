@@ -20,7 +20,7 @@ export function attachPointer(canvas, onChange) {
     e.preventDefault();
     const handler = hit.region.handler;
     // `redraw` lets handlers that act on a timer (held buttons) refresh the view.
-    const s = handler.down?.({ p: hit.p, p0: hit.p, prev: hit.p, ddy: 0, fine: e.shiftKey, redraw: onChange });
+    const s = handler.down?.({ p: hit.p, p0: hit.p, prev: hit.p, ddy: 0, fine: e.shiftKey, alt: e.altKey, redraw: onChange });
     if (s) {
       session = { s, region: hit.region, p0: hit.p, prev: hit.p, lastY: e.clientY };
       hits.press(handler.key);

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **Smaller bar and rail in PATTERNS, ARRANGE, AUTOMATE and MIX:** the stage bar on top, the instrument rail on the left and AUTOMATE's timeline take three quarters of the room they did, and the instrument gets the rest. The gaps around the instrument and the rounding of its corners now match the bar's and the rail's in every stage (they used to differ from stage to stage).
+- The rack's metal side rails now frame every stage, not only the rack, at the rack's size and with its margins above and below, so switching stages no longer shifts the frame.
+- **Picking an instrument on the rail no longer switches it off by mistake:** a click anywhere on a machine's strip shows it, and its ON switch is now a small, darker button of its own at the top (it used to take the strip's whole top edge).
+- **Solo switches the other machines off,** instead of being a hidden listening mode: their ON lights go out, so what you see is what you hear. Solo again and the machines it switched off come back (the ones that were off before stay off). SOLO in MIX, Shift M and the new **Option/Alt-click on a rail strip** all do this. Because it uses the machines' ON switches, a solo during recording is recorded like any ON switch.
+
 ## 0.9.1 — 2026-10-30
 
 ### New

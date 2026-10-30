@@ -125,7 +125,18 @@ export function shapeWidth(ctx, w) {
   else ctx.lineWidth = w;
 }
 
-export function panel(ctx, x, y, w, h, stops, { radius = 2, bevel = 0.3 } = {}) {
+// Panel corners drawn at another scale than the panels around them (the focus
+// stages' instruments next to the rail) are rounded by this factor, so all
+// corners on screen match.
+let panelRadiusScale = 1;
+export function setPanelRadiusScale(s) {
+  const was = panelRadiusScale;
+  panelRadiusScale = s;
+  return was;
+}
+
+export function panel(ctx, x, y, w, h, stops, { radius: r0 = 2, bevel = 0.3 } = {}) {
+  const radius = r0 * panelRadiusScale;
   rrect(ctx, x, y, w, h, radius);
   ctx.fillStyle = vgrad(ctx, y, y + h, stops);
   ctx.fill();
@@ -338,7 +349,8 @@ export function ledBar(ctx, x, y, w, h, on, color) {
 }
 
 // Returns the vertical press offset so callers can shift face labels with it.
-export function button(ctx, x, y, w, h, { face = C.btnDark, pressed = false, radius = 2 } = {}) {
+// highlight: the top edge's sheen (0..1).
+export function button(ctx, x, y, w, h, { face = C.btnDark, pressed = false, radius = 2, highlight = 0.35 } = {}) {
   // Rim, depth below and press travel are hairline details (line units).
   const off = pressed ? px(1) : 0;
   rrect(ctx, x - px(0.6), y - px(0.6), w + px(1.2), h + px(2.6), radius + px(0.6));
@@ -347,7 +359,7 @@ export function button(ctx, x, y, w, h, { face = C.btnDark, pressed = false, rad
   rrect(ctx, x, y + off, w, h, radius);
   ctx.fillStyle = vgrad(ctx, y + off, y + off + h, face);
   ctx.fill();
-  ctx.strokeStyle = pressed ? 'rgba(255,255,255,0.12)' : 'rgba(255,255,255,0.35)';
+  ctx.strokeStyle = `rgba(255,255,255,${pressed ? Math.min(0.12, highlight) : highlight})`;
   ctx.lineWidth = 0.7;
   line(ctx, x + radius, y + off + px(0.6), x + w - radius, y + off + px(0.6));
   return off;

@@ -14,16 +14,22 @@ import { PatternPicker } from './devices/pattern-picker.js';
 import { Rail, RAIL_STRIPS, RAIL_W } from './devices/rail.js';
 import { keysHint, STAGE_BAR_H, STAGE_BAR_MIN_W, StageBar } from './devices/stage-bar.js';
 import { Timeline, TIMELINE_H } from './devices/timeline.js';
-import { MONO, restoreLineScale, rgba, rrect, setLineScale, text, textWidth } from './primitives.js';
+import { MONO, restoreLineScale, rgba, rrect, setLineScale, setPanelRadiusScale, text, textWidth } from './primitives.js';
+import { drawRackRail, RACK_RAIL_W } from './rack-rail.js';
 import { C } from './theme.js';
 import { drawWindows } from './windows.js';
 
 const MARGIN = 6;
 const GAP = 6;
-// Chrome left of the instrument (rail + its margin), and on top of it.
-const CHROME_LEFT = MARGIN + RAIL_W;
-const BAR_BOTTOM = MARGIN + STAGE_BAR_H;
+// Chrome left of the instrument (the instrument rail), and on top of it. The
+// rack's metal rails and its top and bottom margins frame all of it, at the
+// rack's own scale (main.js resize passes the frame in).
+const CHROME_LEFT = RAIL_W;
+const BAR_BOTTOM = STAGE_BAR_H;
 const DRUMS = { r808: R808, r909: R909 };
+// The stage bar, rail and timeline at this share of the size PATTERNS with a bass
+// line would give them: smaller than the instrument, which keeps the room.
+const CHROME_SIZE = 0.75;
 
 // Kept as a list: the layout code stacks any number of devices.
 export const shownDevices = (state) => [RAIL_STRIPS.some(([id]) => id === state.ui.show) ? state.ui.show : RAIL_STRIPS[0][0]];
@@ -62,38 +68,44 @@ class FocusView {
       min: this.minBody(state),
       chrome: this.chromeH(),
       chromeLeft: CHROME_LEFT,
-      chromeW: STAGE_BAR_MIN_W + MARGIN * 2,
+      chromeW: STAGE_BAR_MIN_W,
       reference: { w: CHROME_LEFT + bass.w, h: BAR_BOTTOM + bass.h },
+      rackFrame: true,
       stretch: { w: Infinity, h: Infinity },
       // Under the AUTOMATE timeline a short window can need a bit under 1:1;
       // still bigger than in the rack.
       minScale: 0.5,
+      chromeSize: CHROME_SIZE,
     };
   }
 
-  // chromeScale: chrome units per view unit.
-  constructor(state, app, width, height, chromeScale = 1) {
+  // chromeScale: chrome units per view unit. frame: the rack rails' width and the
+  // top/bottom margin, in view units.
+  constructor(state, app, width, height, chromeScale = 1, frame = { x: 0, y: 0 }) {
     const V = this.constructor;
-    Object.assign(this, { state, app, width, height, key: V.key(state) });
+    Object.assign(this, { state, app, width, height, frame, key: V.key(state) });
+    const innerW = width - frame.x * 2;
+    const innerH = height - frame.y * 2;
     // A narrow canvas (stretch limit) can't fit the chrome at full size: shrink it.
-    const k = Math.min(chromeScale, width / (STAGE_BAR_MIN_W + MARGIN * 2));
+    const k = Math.min(chromeScale, innerW / STAGE_BAR_MIN_W);
     this.chromeScale = chromeScale;
     this.k = k;
     const ids = shownDevices(state);
     state.ui.show = ids[0]; // a choice saved by an older version ("1 + 2")
 
-    // Chrome, in chrome units: the bar across, the rail from under it to the
-    // bottom, the timeline right of the rail.
-    const W = width / k;
-    const H = height / k;
-    const rightX = CHROME_LEFT + MARGIN;
-    this.chrome = [new StageBar(state, app, MARGIN, MARGIN, W - MARGIN * 2), new Rail(state, app, MARGIN, BAR_BOTTOM + GAP, RAIL_W, H - BAR_BOTTOM - GAP - MARGIN)];
-    if (V.timeline) this.chrome.push(new Timeline(state, app, rightX, BAR_BOTTOM + GAP, W - rightX - MARGIN, TIMELINE_H, ids));
+    // Chrome, in chrome units from the frame's inner corner: the bar across, the
+    // rail from under it to the bottom, the timeline right of the rail.
+    const W = innerW / k;
+    const H = innerH / k;
+    const rightX = CHROME_LEFT + GAP;
+    this.chrome = [new StageBar(state, app, 0, 0, W), new Rail(state, app, 0, BAR_BOTTOM + GAP, RAIL_W, H - BAR_BOTTOM - GAP)];
+    if (V.timeline) this.chrome.push(new Timeline(state, app, rightX, BAR_BOTTOM + GAP, W - rightX, TIMELINE_H, ids));
 
-    // The body: everything right of the rail and under the chrome.
-    const x = CHROME_LEFT * k + MARGIN;
-    const y = V.chromeH() * k + GAP;
-    this.body = { x, y, w: width - x - MARGIN, h: height - y - MARGIN };
+    // The body: everything right of the rail and under the chrome, up to the
+    // frame. Its gaps are in chrome units, so they match the chrome's own.
+    const x = frame.x + (CHROME_LEFT + GAP) * k;
+    const y = frame.y + (V.chromeH() + GAP) * k;
+    this.body = { x, y, w: width - frame.x - x, h: height - frame.y - y };
     this.devices = this.buildBody(this.body);
   }
 
@@ -127,19 +139,35 @@ class FocusView {
     const { state } = this;
     ctx.fillStyle = C.rackBg;
     ctx.fillRect(0, 0, this.width, this.height);
+    // The rack's rails, at the rack's scale.
+    const { frame, k } = this;
+    if (frame.x) {
+      const r = frame.x / RACK_RAIL_W; // view units per rack unit
+      const s = (chromeScale / k) * r;
+      ctx.save();
+      ctx.setTransform(s, 0, 0, s, 0, 0);
+      const railLines = setLineScale(ctx);
+      drawRackRail(ctx, 0, this.height / r);
+      drawRackRail(ctx, this.width / r - RACK_RAIL_W, this.height / r);
+      restoreLineScale(railLines);
+      ctx.restore();
+    }
     ctx.save();
-    ctx.setTransform(chromeScale, 0, 0, chromeScale, 0, 0);
+    ctx.setTransform(chromeScale, 0, 0, chromeScale, (frame.x * chromeScale) / k, (frame.y * chromeScale) / k);
     const lines = setLineScale(ctx);
     for (const d of this.chrome) drawAt(ctx, d);
     restoreLineScale(lines);
     ctx.restore();
-    // The pattern picker takes the instrument's place (see rail.js).
+    // The pattern picker takes the instrument's place (see rail.js). Panel
+    // corners round like the chrome's.
+    const radius = setPanelRadiusScale(this.k);
     if (state.ui.picker) {
       const { x, y, w, h } = this.body;
       drawAt(ctx, new PatternPicker(state, this.app, x, y, w, h, shownDevices(state)[0]));
     } else {
       for (const d of this.devices) drawAt(ctx, d);
     }
+    setPanelRadiusScale(radius);
     // Notices (the rack shows them in its song display), at chrome size.
     const notice = state.notice && performance.now() < state.notice.until ? state.notice.text : null;
     if (notice) {

@@ -1,7 +1,7 @@
 // Channel strip beside each instrument, like ReBirth's per-device mix section:
 // on switch, pan, delay send, level fader with a left/right meter, and the
 // distortion / pattern filter / compressor routing buttons.
-import { COMP_TARGETS, PCF_TARGETS } from '../../channels.js';
+import { COMP_TARGETS, isSolo, PCF_TARGETS, toggleSolo } from '../../channels.js';
 import { hits } from '../../ui/hits.js';
 import { click, faderDrag } from '../../ui/handlers.js';
 import { automatedMark, Knob, midiBadge } from '../controls.js';
@@ -62,7 +62,7 @@ export function drawFaderWithMeters(ctx, state, x, y, h, param, levels) {
 
 export class ChannelStrip {
   // index: position in CHANNELS (routing targets are index + 1). solo: also a
-  // SOLO button (the MIX stage; listening only, never saved in a song).
+  // SOLO button (the MIX stage): this machine on, the others off (channels.js).
   constructor(state, x, y, w, h, { id, label, index, solo = false }) {
     Object.assign(this, { state, x, y, w, h, id, label, index, solo });
     const small = { ticks: 7, labelSize: 5.5, r: 10 };
@@ -70,7 +70,7 @@ export class ChannelStrip {
     state.define(param('pan'), 0.5);
     state.define(param('delay'), index === 0 ? 0.4 : 0.1);
     state.define(param('level'), 0.72);
-    for (const k of ['mute', 'solo']) state.define(param(k), 0);
+    state.define(param('mute'), 0);
     state.define(param('dist'), index === 0 ? 1 : 0);
     this.knobs = [
       new Knob({ x: 26, y: 37, param: param('pan'), label: 'PAN', style: styleFor(C.mixer), ...small }),
@@ -109,9 +109,6 @@ export class ChannelStrip {
     drawButton(ctx, BUTTON_X, FADER_Y, BUTTON_W, 'DIST', state.on01(dist), C.dist, () => state.toggle(dist));
     drawButton(ctx, BUTTON_X, FADER_Y + 18, BUTTON_W, 'PCF', pcfHere, C.pcf, () => state.setChoice('fx.pcf.target', pcfHere ? 0 : i + 1, nPcf));
     drawButton(ctx, BUTTON_X, FADER_Y + 36, BUTTON_W, 'COMP', compHere(state, i + 1), C.comp, () => toggleComp(state, i + 1));
-    if (this.solo) {
-      const solo = `mixer.${id}.solo`;
-      drawButton(ctx, BUTTON_X, FADER_Y + 62, BUTTON_W, 'SOLO', state.on01(solo), C.ledYellow, () => state.toggle(solo));
-    }
+    if (this.solo) drawButton(ctx, BUTTON_X, FADER_Y + 62, BUTTON_W, 'SOLO', isSolo(state, id), C.ledYellow, () => toggleSolo(state, id));
   }
 }

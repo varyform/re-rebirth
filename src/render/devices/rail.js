@@ -1,12 +1,15 @@
 // The focus stages' instrument rail: one strip per machine, top to bottom, so
-// you see what's sounding and pick what's shown big. Each strip: an ON LED,
-// meters beside the machine's name (click to show the machine), its volume
-// fader, and the playing pattern (click: that machine's pattern picker).
+// you see what's sounding and pick what's shown big. Each strip: a small ON
+// button, meters beside the machine's name, its volume fader, and the playing
+// pattern (click: that machine's pattern picker). A click anywhere else on the
+// strip shows the machine: the ON button is kept small and boxed so a click
+// meant to pick an instrument doesn't switch it off. Option/Alt-click on the
+// strip or its ON button solos the machine: the others switch off (channels.js).
 import { hits } from '../../ui/hits.js';
-import { click, faderDrag, toggle } from '../../ui/handlers.js';
-import { audibleChannel } from '../../channels.js';
+import { click, faderDrag } from '../../ui/handlers.js';
+import { audibleChannel, toggleSolo } from '../../channels.js';
 import { automatedMark, midiBadge } from '../controls.js';
-import { lcd, led, panel, rgba, rrect, sevenSeg, sevenSegWidth, text, vgrad } from '../primitives.js';
+import { button, lcd, led, panel, rgba, rrect, sevenSeg, sevenSegWidth, text, vgrad } from '../primitives.js';
 import { C } from '../theme.js';
 
 export const RAIL_W = 44;
@@ -18,6 +21,8 @@ export const RAIL_STRIPS = [
 ];
 const GAP = 4;
 const LED_H = 14;
+const ON_W = 18; // the ON button
+const ON_H = 11;
 const LCD_H = 14;
 const BANKS = 'ABCD';
 const VOL_X = 28; // level fader bar, right of the meters
@@ -52,11 +57,18 @@ export class Rail {
       ctx.stroke();
     }
 
-    // ON: the machine's own switch, as on its panel.
-    led(ctx, w / 2, LED_H / 2 + 2, 2.6, on, C.ledGreen);
-    hits.rect(ctx, 0, 0, w, LED_H + 2, toggle(state, `${id}.on`));
+    // The whole strip shows the machine; the controls below register later and win.
+    const show = (ev) => (ev.alt ? toggleSolo(state, id) : (state.ui.show = id));
+    hits.rect(ctx, 0, 0, w, h, click(show, `rail.${id}`));
 
-    // Name (vertical) and level; clicking here shows the machine.
+    // ON: the machine's own switch, as on its panel.
+    const key = `rail.${id}.on`;
+    const bx = (w - ON_W) / 2;
+    const off = button(ctx, bx, 3, ON_W, ON_H, { face: C.btnQuiet, highlight: 0.12, pressed: hits.isPressed(key) });
+    led(ctx, w / 2, 3 + ON_H / 2 + off, 2.1, on, C.ledGreen);
+    hits.rect(ctx, bx, 3, ON_W, ON_H, click((ev) => (ev.alt ? toggleSolo(state, id) : state.toggle(`${id}.on`)), key));
+
+    // Name (vertical) and level.
     const top = LED_H + 3;
     const bottom = h - LCD_H - 5;
     const mh = bottom - top;
@@ -65,14 +77,13 @@ export class Rail {
     ctx.rotate(-Math.PI / 2);
     text(ctx, name, 0, 0.5, { size: Math.min(6.5, mh / 5), weight: 800, color: shown ? C.ledYellow : on ? C.inkLight : C.inkMuted, spacing: 0.4 });
     ctx.restore();
-    // Not heard (off, muted, or another channel soloed): the level it would
+    // Not heard (off or muted): the level it would
     // have, ghosted, so you still see it playing along.
     const heard = audibleChannel(state, id);
     const [l, r] = (heard ? state.meters[id] : state.meters.ghost?.[id]) ?? [0, 0];
     const colors = heard ? LIVE : GHOST;
     this.drawLevel(ctx, 14.5, top, 4, mh, l, colors);
     this.drawLevel(ctx, 20, top, 4, mh, r, colors);
-    hits.rect(ctx, 0, top, VOL_X - 2, mh, click(() => (state.ui.show = id), `rail.${id}`));
     this.drawVolume(ctx, `mixer.${id}.level`, top, mh);
 
     // Pattern playing (or queued, blinking).

@@ -24,6 +24,8 @@ export const C = {
   transport: ['#33363d', '#1c1e23'],
   btnDark: ['#56595f', '#2a2c31'],
   btnPressed: ['#2a2c31', '#3c3f45'],
+  // Small buttons that shouldn't draw the eye (the rail's ON switches).
+  btnQuiet: ['#393b40', '#25272b'],
 
   fx: ['#3a3f4a', '#22252c'], // channel strips
   fxPanel: ['#34363b', '#1b1c20'], // effect modules: neutral grey, brushed

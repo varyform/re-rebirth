@@ -340,9 +340,9 @@ export class AudioEngine {
     for (const id of BASS_IDS) this.bass[id].setParams(this.bassParams(id), set);
     const vintage = state.on01('song.vintage');
 
-    const anySolo = CHANNELS.some(([id]) => state.on01(`mixer.${id}.solo`));
+
     for (const [id, ch] of Object.entries(this.channels)) {
-      ch.audible = audibleChannel(state, id, anySolo);
+      ch.audible = audibleChannel(state, id);
       const [l, r] = panGains(g(`mixer.${id}.pan`), g(`mixer.${id}.level`));
       set(ch.pan.l, l);
       set(ch.pan.r, r);

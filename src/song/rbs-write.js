@@ -4,7 +4,7 @@
 // the files: 712-byte USRI, 909 patterns at 31, 909 mixer ids 24-27).
 //
 // What a ReBirth song can't hold is left out: the bass lines' volume knobs,
-// the delay return, solo, and song events for those.
+// the delay return, and song events for those.
 import { COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { BASS_IDS, PATTERN_COUNT, STEPS } from '../state.js';
 import { STANDARD_MOD } from './rbs.js';
