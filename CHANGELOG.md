@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.2 — 2026-10-30
 
 ### Changed
 - **Smaller bar and rail in PATTERNS, ARRANGE, AUTOMATE and MIX:** the stage bar on top, the instrument rail on the left and AUTOMATE's timeline take three quarters of the room they did, and the instrument gets the rest. The gaps around the instrument and the rounding of its corners now match the bar's and the rail's in every stage (they used to differ from stage to stage).
