@@ -50,6 +50,8 @@ The four channel strips with long faders and SOLO, the effects and the master wi
 
 Plug in a MIDI controller (Chrome, Edge or Firefox) and click **MIDI** on the bar. **SET UP MY CONTROLLER** asks for each control in turn, with a picture lighting the one to touch; half a minute later every knob, slider, pad and button does its job, whatever numbers it sends. The knobs follow the instrument on screen (cutoff, resonance, env mod, decay… on a bass line, the selected drum's knobs on a drum machine), sliders are the volumes, the big knob steps patterns, and green badges on screen show which hardware control drives what. MIDI LEARN binds anything else. Laid out for an Arturia MiniLab 3, but any controller works.
 
+The keys play the bass line on screen like a mono synth: a note lasts as long as you hold it, playing legato slides from note to note, and hitting hard accents. While the pattern plays in PATTERNS, press <kbd>R</kbd> and what you play is written into the pattern on the nearest steps as it goes round: held notes become tied notes, legato notes slides. Stopped, the keys type steps one by one.
+
 ### Keyboard
 
 ![The / overlay: the shortcuts that work in PATTERNS with a bass line up](docs/screenshots/keys.png)
@@ -99,6 +101,7 @@ Everything has a key, and <kbd>/</kbd> lists the ones that work where you are, i
 | PATTERNS, drums shown: <kbd>A</kbd> <kbd>S</kbd> <kbd>D</kbd> … <kbd>'</kbd> | Play a lane and select it; <kbd>Shift</kbd> accents |
 | PATTERNS: <kbd>Shift</kbd> <kbd>←</kbd> <kbd>→</kbd>, <kbd>Shift</kbd> <kbd>R</kbd>, <kbd>⌘/Ctrl</kbd> <kbd>D</kbd> | Shift the pattern a step, reverse it, double it |
 | PATTERNS, bass shown: <kbd>Shift</kbd> <kbd>↑</kbd> <kbd>↓</kbd> (with <kbd>⌘/Ctrl</kbd>: an octave) | Transpose the bass line a semitone |
+| PATTERNS, bass shown: <kbd>R</kbd> | Record MIDI keys into the pattern while it plays |
 
 ## Song compatibility
 

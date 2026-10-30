@@ -87,6 +87,12 @@ export function shortcutGroups(state, app) {
         { keys: 'TAB', label: 'Slide into the next note' },
         { keys: '\u232B', label: 'Rest' },
         { keys: '\u2190 \u2192', label: 'Move the cursor' },
+        {
+          keys: 'R',
+          label: `Record MIDI keys into the pattern while it plays (now ${ui.liveRec ? 'ON' : 'OFF'})`,
+          test: key('KeyR', { shift: false }),
+          run: () => app.midi?.live.toggleRec(),
+        },
       ],
     });
   }

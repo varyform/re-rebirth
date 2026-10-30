@@ -12,6 +12,7 @@ import { R808, R909 } from './render/devices/drum-machine.js';
 import { shownDevices } from './render/focus-view.js';
 import { BASS_IDS, DRUM_IDS } from './state.js';
 import { stepInstrument, stepPattern } from './ui/shortcuts.js';
+import { LiveBass } from './ui/live-bass.js';
 import { enterNote, stepTarget } from './ui/step-keys.js';
 
 const STORE = 're-rebirth.midi';
@@ -135,6 +136,7 @@ export class Midi {
     // between visits.
     this.kinds = new Map(load(KINDS, []));
     this.held = new Map(); // buttons sending controllers: pressed or not
+    this.live = new LiveBass(state, engine, clock);
     this.setProfile(load(PROFILE, null));
     state.ui.midi = navigator.requestMIDIAccess ? 'off' : 'unavailable';
     // Connected before: permission is remembered, so reconnect without asking.
@@ -258,6 +260,7 @@ export class Midi {
     const channel = status & 0x0f;
     if (type === 0xb0) this.cc(channel, a, b);
     else if (type === 0x90 && b > 0) this.noteOn(channel, a, b);
+    else if (type === 0x80 || type === 0x90) this.live.noteOff(a);
     else return;
     this.onChange();
   }
@@ -553,9 +556,10 @@ export class Midi {
     while (rel > 24) rel -= 12;
     const octave = rel === 24 ? 1 : Math.floor(rel / 12);
     const step = { note: rel - octave * 12, octave, accent };
-    // PATTERNS writes steps; elsewhere the keys just play the bass line.
-    if (stepTarget(this.state)) enterNote(this.state, this.engine, id, step);
-    else this.engine.auditionBass(id, { ...step, gate: true, slide: false, tie: false });
+    // Stopped in PATTERNS, keys write steps; otherwise they play the bass line
+    // live (and record into the pattern when armed, see ui/live-bass.js).
+    if (stepTarget(this.state) && !this.state.transport.playing) enterNote(this.state, this.engine, id, step);
+    else this.live.noteOn(id, note, step);
   }
 
   // Pads play the drum machine on screen (Drum 09 when a bass line is), and

@@ -172,7 +172,9 @@ export class Bassline {
     if (!this.subtitle) return;
     const { L, w } = this;
     const hint = this.subtitle();
-    const opts = { size: 6, weight: 700, align: 'left', color: C.bassNote, spacing: 0.2 };
+    // Red while MIDI keys record into the pattern (ui/live-bass.js).
+    const color = this.state.ui.liveRec ? C.ledRed : C.bassNote;
+    const opts = { size: 6, weight: 700, align: 'left', color, spacing: 0.2 };
     const fit = (w - 2 * L.labelX) / textWidth(ctx, hint, opts);
     if (fit < 1) opts.size *= fit;
     text(ctx, hint, L.labelX, (L.gridBottom + L.keyboard[1]) / 2 + 1, opts);

@@ -13,6 +13,9 @@
   - ⌘/Ctrl Z undoes them, and CLEAR, PASTE and RANDOM too. Undo now works in PATTERNS as well.
 - The typing hint in PATTERNS sits under the step grid, where it has room.
 - **Export stems** for mixing in a DAW: STEMS in the EXPORT window renders one WAV per machine (each with its effects, without its echoes) and one with the delay's echoes, all the same length, in a ZIP. Machines that stay silent are left out. Played together, the stems add up to the mix, unless the mix was loud enough to hit the safety limiter or the compressor sits on the master.
+- **Play the bass lines from a MIDI keyboard like a synth.** A note sounds as long as the key is down (it used to be a fixed blip), legato playing slides from note to note and back to a key still held, and a hard hit (velocity over 100) accents. It works with the song or patterns playing too: while a key is down the bass line follows you, and the pattern takes over again when you let go.
+  - **Record into the pattern:** in PATTERNS, press R and play along while the pattern loops. Each note lands on the step it's nearest to, a note held over several steps becomes a tied note, and legato notes become slides. Steps you don't play keep what they had, so you can build a line over several rounds. ⌘/Ctrl Z takes back the whole take. The hint under the step grid turns red while recording.
+  - Stopped in PATTERNS, the keys still type the line step by step.
 
 ### Changed
 - Every render of a song is now identical, down to the drums' noise, so stems line up with the mix. Exported files are named after the song's file, like saves, rather than its title, which is often a credit.

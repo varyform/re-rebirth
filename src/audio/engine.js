@@ -124,6 +124,7 @@ export class AudioEngine {
     // Offline stem renders: a channel id (that channel alone, dry) or 'delay' (only
     // the echoes of every channel). Null plays everything.
     this.stem = null;
+    this.liveHeld = Object.fromEntries(BASS_IDS.map((id) => [id, false]));
     // The song's sound model: 0 "ReBirth 2.0", 1 "Vintage ReBirth" (see bass-voice.js).
     state.define('song.vintage', 0);
   }
@@ -438,6 +439,8 @@ export class AudioEngine {
     // Switched-off machines still play, silenced by their channel's mute stage
     // (see sync), so their ghost meters show what they would sound like.
     for (const id of BASS_IDS) {
+      // A key held on the MIDI keyboard has the voice; the pattern waits.
+      if (this.liveHeld[id]) continue;
       const pattern = state.pattern(id);
       const pos = positions[id];
       const t = time + this.swing(pattern, pos, stepDur);
@@ -501,6 +504,7 @@ export class AudioEngine {
     if (!this.ctx) return;
     const t = this.ctx.currentTime;
     for (const voice of Object.values(this.bass)) voice.release(t);
+    for (const id of BASS_IDS) this.liveHeld[id] = false;
   }
 
   // Preview while editing: one bass step, or one drum voice.
@@ -510,6 +514,26 @@ export class AudioEngine {
     const t = this.ctx.currentTime + 0.01;
     this.sync();
     this.bass[id].audition(step, t, Math.min(0.3, this.stepDuration() * 2), this.bassParams(id));
+  }
+
+  // Live playing from MIDI keys (ui/live-bass.js): a held note, legato glides.
+  liveBass(id, step, legato) {
+    this.start();
+    const t = this.ctx.currentTime + 0.005;
+    this.sync();
+    this.liveHeld[id] = true;
+    this.bass[id].liveNote(step, legato, t, this.bassParams(id));
+  }
+
+  liveBassOff(id) {
+    if (!this.ctx || !this.liveHeld[id]) return;
+    this.liveHeld[id] = false;
+    this.bass[id].liveRelease(this.ctx.currentTime + 0.005);
+  }
+
+  // When a key pressed now is heard: the audio clock minus the output latency.
+  heardTime() {
+    return this.ctx ? this.ctx.currentTime - (this.ctx.outputLatency || 0) : 0;
   }
 
   auditionDrum(id, track) {

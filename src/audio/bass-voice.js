@@ -197,6 +197,28 @@ export class BassVoice {
     if (!s.slide && this.open) this.close(t + stepDur * GATE);
   }
 
+  // Played live (MIDI keys): the note sounds until liveRelease. Legato (a key
+  // still down) glides to the new pitch without restarting the envelopes, like a
+  // slide. Starting a note cancels whatever the sequencer had scheduled.
+  liveNote(s, legato, t, p) {
+    const cents = (s.note + s.octave * 12) * 100;
+    const pitch = this.pitch.offset;
+    if (legato && this.open) {
+      hold(pitch, t);
+      pitch.setTargetAtTime(cents, t, GLIDE);
+      return;
+    }
+    pitch.cancelScheduledValues(t);
+    pitch.setValueAtTime(cents, t);
+    this.trigger(t, s.accent, p);
+    this.open = true;
+    this.slide = false;
+  }
+
+  liveRelease(t) {
+    this.release(t);
+  }
+
   // A single note for previews: never legato, never held.
   audition(s, t, dur, p) {
     this.slide = false;

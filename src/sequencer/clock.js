@@ -9,6 +9,7 @@ import { TICKS_PER_BAR, TICKS_PER_STEP, valueAt } from '../song/song.js';
 import { DEVICE_IDS } from '../state.js';
 
 const LOOKAHEAD = 0.12; // seconds scheduled ahead
+const RECENT = 2; // seconds of scheduled steps kept for nearestStep
 const INTERVAL = 25; // ms between scheduler runs
 const START_DELAY = 0.05;
 
@@ -23,6 +24,7 @@ export class Clock {
     this.pos = 0; // song position in steps
     this.devPos = {};
     this.queue = [];
+    this.recent = []; // scheduled steps of the last RECENT seconds
     this.timer = 0;
     state.on((type, d) => this.onStateChange(type, d));
   }
@@ -46,6 +48,7 @@ export class Clock {
     this.jump((this.t.bar - 1) * 16);
     this.nextTime = ctx.currentTime + START_DELAY;
     this.queue = [];
+    this.recent = [];
     this.endAt = null;
     this.schedule();
     this.timer = setInterval(this.schedule, INTERVAL);
@@ -140,6 +143,8 @@ export class Clock {
       const positions = { ...this.devPos };
       this.engine.playStep(positions, this.nextTime, stepDur);
       this.queue.push({ time: this.nextTime, pos: this.pos, positions });
+      this.recent.push({ time: this.nextTime, positions, stepDur });
+      while (this.recent[0].time < ctx.currentTime - RECENT) this.recent.shift();
 
       for (const id of DEVICE_IDS) this.devPos[id] = (this.devPos[id] + 1) % state.pattern(id).length;
       this.pos++;
@@ -227,6 +232,14 @@ export class Clock {
         this.player.recordPattern(id, this.state.patternIndex(id), bar);
       }
     }
+  }
+
+  // The step of device `id` played nearest to audio time `time` (seconds): where a
+  // key played along with what's heard belongs. { pos, time, stepDur } or null.
+  nearestStep(id, time) {
+    let best = null;
+    for (const e of this.recent) if (!best || Math.abs(e.time - time) < Math.abs(best.time - time)) best = e;
+    return best && { pos: best.positions[id], time: best.time, stepDur: best.stepDur };
   }
 
   heardTick() {
