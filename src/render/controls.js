@@ -76,6 +76,7 @@ const CELL_H = 15;
 
 // Bank A–D + pattern 1–8 buttons with a small readout. ~52 units tall.
 // While playing, picks are queued until the current pattern ends (blinking LED).
+// Shift-click a pattern: add it to the machine's chain (state.js).
 export class PatternSelector {
   constructor({ id, x, y, w, theme, state }) {
     Object.assign(this, { id, x, y, w, theme, state });
@@ -118,14 +119,22 @@ export class PatternSelector {
     const label = `${BANKS[Math.floor(index / 8)]}${(index % 8) + 1}`;
     const dw = 6.5;
     sevenSeg(ctx, label, lx + (lw - sevenSegWidth(label, dw)) / 2, rowA + 2.5, dw, CELL_H - 5);
+    drawChainPos(ctx, dev, lx + lw - 3, rowA + CELL_H / 2 + 0.5);
 
     text(ctx, 'PATTERN', x, y + 31, { size: 6, align: 'left', color: theme.ink, spacing: 0.5 });
     const bank = Math.floor(shown / 8);
     for (let i = 0; i < 8; i++) {
       const index = bank * 8 + i;
-      this.drawCell(ctx, i, rowB, String(i + 1), lit(index), `${id}.pattern.${i}`, () => state.pickPattern(id, index));
+      const pick = (ev) => (ev.fine ? state.chainPattern(id, index) : state.pickPattern(id, index));
+      this.drawCell(ctx, i, rowB, String(i + 1), lit(index), `${id}.pattern.${i}`, pick);
     }
   }
+}
+
+// "2/3": where a machine is in its pattern chain, right-aligned at (right, y).
+export function drawChainPos(ctx, dev, right, y, size = 5) {
+  if (dev.chain.length < 2) return;
+  text(ctx, `${dev.chainPos + 1}/${dev.chain.length}`, right, y, { size, weight: 800, align: 'right', color: C.ledOrange });
 }
 
 const TOOL = { size: 5.5, weight: 800, spacing: 0.4 };

@@ -8,7 +8,7 @@
 import { hits } from '../../ui/hits.js';
 import { click, faderDrag } from '../../ui/handlers.js';
 import { audibleChannel, toggleSolo } from '../../channels.js';
-import { automatedMark, midiBadge } from '../controls.js';
+import { automatedMark, drawChainPos, midiBadge } from '../controls.js';
 import { button, lcd, led, panel, rgba, rrect, sevenSeg, sevenSegWidth, text, vgrad } from '../primitives.js';
 import { C } from '../theme.js';
 
@@ -93,7 +93,11 @@ export class Rail {
     const label = `${BANKS[Math.floor(index / 8)]}${(index % 8) + 1}`;
     const ly = h - LCD_H - 3;
     lcd(ctx, 5, ly, w - 10, LCD_H);
-    sevenSeg(ctx, label, 5 + (w - 10 - sevenSegWidth(label, 6)) / 2, ly + 2.5, 6, LCD_H - 5);
+    // A chain shifts the readout left for its "2/3".
+    const chained = dev.chain.length > 1;
+    const lx = chained ? 8 : 5 + (w - 10 - sevenSegWidth(label, 6)) / 2;
+    sevenSeg(ctx, label, lx, ly + 2.5, 6, LCD_H - 5);
+    drawChainPos(ctx, dev, w - 7, ly + LCD_H / 2 + 0.5, 4.5);
     if (shown && state.ui.picker) {
       rrect(ctx, 4, ly - 1, w - 8, LCD_H + 2, 2.5);
       ctx.strokeStyle = C.ledYellow;

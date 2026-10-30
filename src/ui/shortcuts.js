@@ -74,6 +74,12 @@ export function shortcutGroups(state, app) {
         { test: key('ArrowRight'), run: () => stepPattern(state, 1) },
         { keys: '\u2191 \u2193', label: 'Previous / next bank', test: key('ArrowUp'), run: () => stepPattern(state, -8) },
         { test: key('ArrowDown'), run: () => stepPattern(state, 8) },
+        ...(ui.stage === 'arrange'
+          ? []
+          : [
+            { keys: '\u21E7 CLICK', label: 'Add a pattern to the chain (played in turn, pattern mode)' },
+            { keys: '\u232B', label: 'Clear the chain', test: (e) => plain(e) && (e.code === 'Backspace' || e.code === 'Delete'), run: () => state.clearChain(id) },
+          ]),
         { keys: 'P  ESC', label: 'Close the picker', test: key('KeyP'), run: () => (ui.picker = false) },
       ],
     });

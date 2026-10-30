@@ -4,7 +4,7 @@
 // the files: 712-byte USRI, 909 patterns at 31, 909 mixer ids 24-27).
 //
 // What a ReBirth song can't hold is left out: the bass lines' volume knobs,
-// the delay return, and song events for those.
+// the delay return, song events for those, and pattern chains.
 import { COMP_TARGETS, PCF_TARGETS } from '../channels.js';
 import { BASS_IDS, PATTERN_COUNT, STEPS } from '../state.js';
 import { STANDARD_MOD } from './rbs.js';
@@ -347,5 +347,6 @@ export function rbsLosses(s) {
   const lost = [];
   if (BASS_IDS.some((id) => Math.abs((s.params[`${id}.volume`] ?? 0.8) - 0.8) > 0.01)) lost.push('bass volume');
   if (Math.abs((s.params['mixer.delayReturn'] ?? 0.6) - 0.6) > 0.01) lost.push('delay return');
+  if ([...Object.values(s.bass ?? {}), ...Object.values(s.drums ?? {})].some((d) => d.chain?.length > 1)) lost.push('pattern chains');
   return lost;
 }

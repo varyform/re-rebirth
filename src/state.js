@@ -2,6 +2,7 @@ import { emptySong } from './song/song.js';
 
 export const PATTERN_COUNT = 32; // 4 banks × 8 patterns
 export const STEPS = 16;
+export const MAX_CHAIN = 16; // patterns in a pattern chain
 export const BASS_IDS = ['bass1', 'bass2'];
 export const DRUM_IDS = ['r808', 'r909'];
 export const DEVICE_IDS = [...BASS_IDS, ...DRUM_IDS];
@@ -57,11 +58,11 @@ export class State {
     this.transport = { playing: false, tempo: 120, mode: 'pattern', loop: false, rec: false, bar: 1, step: -1, positions: {} };
     this.bass = {};
     for (const id of BASS_IDS) {
-      this.bass[id] = { bank: 0, pattern: 0, queued: null, selectedStep: 0, patterns: Array.from({ length: PATTERN_COUNT }, emptyBassPattern) };
+      this.bass[id] = { bank: 0, pattern: 0, queued: null, chain: [], chainPos: 0, selectedStep: 0, patterns: Array.from({ length: PATTERN_COUNT }, emptyBassPattern) };
     }
     this.drums = {};
     for (const id of DRUM_IDS) {
-      this.drums[id] = { bank: 0, pattern: 0, queued: null, selected: 'bd', patterns: Array.from({ length: PATTERN_COUNT }, emptyDrumPattern) };
+      this.drums[id] = { bank: 0, pattern: 0, queued: null, chain: [], chainPos: 0, selected: 'bd', patterns: Array.from({ length: PATTERN_COUNT }, emptyDrumPattern) };
     }
     this.song = emptySong();
     // `mod`: the ReBirth mod a song was made for, empty for the standard sounds.
@@ -135,9 +136,32 @@ export class State {
 
   // While playing, user picks are queued and take effect when the clock
   // reaches the end of the current pattern (or the next bar in song mode).
+  // A single pick ends a chain.
   pickPattern(id, index) {
+    this.clearChain(id);
     if (this.transport.playing) this.device(id).queued = index;
     else this.selectPattern(id, index);
+  }
+
+  // Pattern chains (pattern mode): the machine plays its chain's patterns in
+  // turn, one after another, and goes round. `chainPos` is the one playing.
+  // Adding to an empty chain starts it with what plays now (or is queued).
+  chainPattern(id, index) {
+    const dev = this.device(id);
+    if (!dev.chain.length) Object.assign(dev, { chain: [dev.queued ?? this.patternIndex(id)], chainPos: 0 });
+    if (dev.chain.length < MAX_CHAIN) dev.chain.push(index);
+  }
+
+  clearChain(id) {
+    Object.assign(this.device(id), { chain: [], chainPos: 0 });
+  }
+
+  // Moves the chain on; returns the pattern to play next, or null without a chain.
+  nextInChain(id) {
+    const dev = this.device(id);
+    if (dev.chain.length < 2) return null;
+    dev.chainPos = (dev.chainPos + 1) % dev.chain.length;
+    return dev.chain[dev.chainPos];
   }
 
   selectPattern(id, index, source = 'user') {

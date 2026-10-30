@@ -1,8 +1,10 @@
 // Pattern picker: all 32 patterns of one machine (banks A-D down, 1-8 across)
 // as small previews, in place of the instrument. Bass lines show as piano
 // rolls, drum patterns as lane grids. Click one to play it (while playing it
-// waits for the end of the current pattern, like the selectors). The rail
-// stays beside it, so another machine is one click away.
+// waits for the end of the current pattern, like the selectors). Shift-click
+// adds patterns to a chain the machine plays in turn (pattern mode; state.js),
+// shown in the header with the one playing lit. The rail stays beside it, so
+// another machine is one click away.
 import { HIT } from '../../state.js';
 import { hits } from '../../ui/hits.js';
 import { click } from '../../ui/handlers.js';
@@ -21,8 +23,11 @@ const LOW = -12;
 const HIGH = 24;
 const COPY = {
   title: (id) => `PATTERNS \u00B7 ${NAMES[id]}`,
-  playHint: 'CLICK OR \u2190 \u2192 \u2191 \u2193 TO PLAY \u00B7 WHILE PLAYING, THE CHANGE WAITS FOR THE END OF THE PATTERN',
+  playHint: 'CLICK OR \u2190 \u2192 \u2191 \u2193 TO PLAY \u00B7 SHIFT-CLICK TO CHAIN PATTERNS \u00B7 WHILE PLAYING, A CHANGE WAITS FOR THE END OF THE PATTERN',
   brushHint: 'CLICK THE PATTERN TO PAINT WITH',
+  chain: 'CHAIN',
+  songMode: '\u00B7 PLAYS IN PATTERN MODE',
+  clearChain: 'CLEAR CHAIN',
   close: 'CLOSE',
   empty: 'EMPTY',
 };
@@ -45,23 +50,34 @@ export class PatternPicker {
     hits.rect(ctx, w - 8 - closeW, 4, closeW, HEADER_H - 7, click(() => (state.ui.picker = false), key));
     const titleW = textWidth(ctx, COPY.title(id), { ...LABEL, size: 7.5, weight: 900, spacing: 0.8 });
     const hintX = 10 + titleW + 12;
-    const room = w - 8 - closeW - 10 - hintX;
-    const hintOpts = { size: 5.5, weight: 700, align: 'left', color: C.inkMuted, spacing: 0.2 };
-    const fit = room / textWidth(ctx, hint, hintOpts);
-    if (fit > 0.6) text(ctx, hint, hintX, HEADER_H / 2 + 1, { ...hintOpts, size: hintOpts.size * Math.min(1, fit) });
+    let right = w - 8 - closeW - 10;
+    const dev = state.device(id);
+    // In ARRANGE it picks the row's brush (what gets painted), not what plays.
+    const brushMode = state.ui.stage === 'arrange';
+    const chained = !brushMode && dev.chain.length > 1;
+    if (chained) {
+      const cw = textWidth(ctx, COPY.clearChain, LABEL) + 14;
+      const ckey = 'picker.chain.clear';
+      const coff = button(ctx, right - cw, 4, cw, HEADER_H - 7, { pressed: hits.isPressed(ckey) });
+      text(ctx, COPY.clearChain, right - cw / 2, 4 + (HEADER_H - 7) / 2 + 0.5 + coff, { ...LABEL, color: C.inkLight });
+      hits.rect(ctx, right - cw, 4, cw, HEADER_H - 7, click(() => state.clearChain(id), ckey));
+      right -= cw + 10;
+      this.drawChain(ctx, hintX, right - hintX, dev);
+    } else {
+      const hintOpts = { size: 5.5, weight: 700, align: 'left', color: C.inkMuted, spacing: 0.2 };
+      const fit = (right - hintX) / textWidth(ctx, hint, hintOpts);
+      if (fit > 0.6) text(ctx, hint, hintX, HEADER_H / 2 + 1, { ...hintOpts, size: hintOpts.size * Math.min(1, fit) });
+    }
 
     const gx = 6 + BANK_W;
     const gy = HEADER_H + 2;
     const cw = (w - gx - 6 - GAP * 7) / 8;
     const ch = (h - gy - 6 - GAP * 3) / 4;
-    const dev = state.device(id);
-    // In ARRANGE it picks the row's brush (what gets painted), not what plays.
-    const brushMode = state.ui.stage === 'arrange';
     const brush = state.ui.brush?.[id] ?? dev.bank * 8 + dev.pattern;
     const current = brushMode ? brush : dev.bank * 8 + dev.pattern;
     const blink = state.transport.step % 4 < 2;
-    const pick = (index) => {
-      if (!brushMode) return state.pickPattern(id, index);
+    const pick = (index, ev) => {
+      if (!brushMode) return ev.fine ? state.chainPattern(id, index) : state.pickPattern(id, index);
       (state.ui.brush ??= {})[id] = index;
       state.ui.picker = false;
     };
@@ -73,9 +89,41 @@ export class PatternPicker {
         const x = gx + i * (cw + GAP);
         const lit = index === current || (!brushMode && dev.queued === index && blink);
         this.drawCell(ctx, x, y, cw, ch, index, lit, !brushMode && index === current);
-        hits.rect(ctx, x, y, cw, ch, click(() => pick(index), `picker.${index}`));
+        if (chained) this.drawChainBadge(ctx, x + cw, y, dev, index);
+        hits.rect(ctx, x, y, cw, ch, click((ev) => pick(index, ev), `picker.${index}`));
       }
     }
+  }
+
+  // "CHAIN  A1 → A3 → B2", the one playing lit, squeezed to fit `room`.
+  drawChain(ctx, x, room, dev) {
+    const label = { ...LABEL, size: 6.5, align: 'left' };
+    const parts = dev.chain.map((i) => `${BANKS[Math.floor(i / 8)]}${(i % 8) + 1}`);
+    const songMode = this.state.transport.mode === 'song';
+    const all = `${COPY.chain}  ${parts.join(' \u2192 ')}${songMode ? `  ${COPY.songMode}` : ''}`;
+    const k = Math.min(1, room / textWidth(ctx, all, label));
+    const opts = { ...label, size: label.size * k };
+    let cx = x;
+    const put = (s, color) => {
+      text(ctx, s, cx, HEADER_H / 2 + 1, { ...opts, color });
+      cx += textWidth(ctx, s, opts);
+    };
+    put(`${COPY.chain}  `, C.inkMuted);
+    parts.forEach((p, i) => {
+      if (i) put(' \u2192 ', C.inkMuted);
+      put(p, i === dev.chainPos ? C.ledYellow : C.inkLight);
+    });
+    if (songMode) put(`  ${COPY.songMode}`, C.inkMuted);
+  }
+
+  // Where a pattern comes in the chain (1-based, every time it does), in the
+  // cell's top-right corner.
+  drawChainBadge(ctx, right, y, dev, index) {
+    const order = dev.chain.flatMap((p, i) => (p === index ? [i + 1] : []));
+    if (!order.length) return;
+    const s = order.join(' ');
+    const opts = { ...LABEL, size: 5.5, align: 'right', color: C.ledOrange };
+    text(ctx, s, right - 4, y + 6, opts);
   }
 
   drawCell(ctx, x, y, w, h, index, lit, current) {

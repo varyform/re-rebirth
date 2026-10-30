@@ -112,6 +112,9 @@ export class Clock {
     this.player.endPass(this.pos * TICKS_PER_STEP);
     this.pos = pos;
     for (const id of DEVICE_IDS) this.devPos[id] = 0;
+    // Machines starting over from here begin with the pattern they're on, not
+    // the next one of their chain.
+    this.fresh = new Set(DEVICE_IDS);
     if (this.songMode) this.player.chase(pos * TICKS_PER_STEP);
   }
 
@@ -152,9 +155,18 @@ export class Clock {
     }
   };
 
+  // At the top of a machine's pattern: a queued pick, or in pattern mode the
+  // next pattern of its chain.
   applyQueued(id, tick) {
+    if (this.devPos[id] !== 0) return;
+    const fresh = this.fresh?.delete(id);
     const dev = this.state.device(id);
-    if (dev.queued === null || this.devPos[id] !== 0) return;
+    if (dev.queued === null) {
+      if (fresh || this.songMode) return;
+      const next = this.state.nextInChain(id);
+      if (next !== null) this.state.selectPattern(id, next, 'chain');
+      return;
+    }
     const index = dev.queued;
     this.state.selectPattern(id, index);
     if (this.recording) this.player.recordPattern(id, index, Math.floor(tick / TICKS_PER_BAR) * TICKS_PER_BAR);

@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Pattern chains:** Shift-click patterns in the pattern picker (or on a machine's 1–8 buttons in the rack) and the machine plays them in turn, then goes round: A1 → A3 → B2 → A1… A quick way to sketch a part longer than one pattern without writing the song. Each machine has its own chain, starting from the pattern it's on.
+  - The picker's header shows the chain with the pattern playing lit, and each chained pattern carries its place in the chain. The rail and the rack's pattern readout show where the machine is ("2/3").
+  - Picking a single pattern, CLEAR CHAIN or ⌫ in the picker ends the chain.
+  - Chains play in pattern mode (PATTERNS, or the rack in PATTERN mode); song mode plays the song. They're kept in Re-Rebirth's own session files; a `.rbs` has no room for them, and saving one says so.
+
 ## 0.9.2 — 2026-10-30
 
 ### Changed

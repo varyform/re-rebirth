@@ -92,6 +92,7 @@ Everything has a key, and <kbd>/</kbd> lists the ones that work where you are, i
 | <kbd>←</kbd> <kbd>→</kbd> | Back / forward a bar; in PATTERNS the step cursor or drum lane |
 | <kbd>M</kbd>, <kbd>Shift</kbd> <kbd>M</kbd> | Instrument on/off, solo (the others off; again: back on) |
 | <kbd>Option/Alt</kbd>-click a machine on the rail | Solo it |
+| <kbd>Shift</kbd>-click patterns (picker, or 1–8 in the rack) | Chain them: the machine plays them in turn (pattern mode) |
 | <kbd>R</kbd>, <kbd>Home</kbd>, <kbd>⌘/Ctrl</kbd> <kbd>Z</kbd> | Record, to the start, undo a pass or edit |
 | <kbd>⌘/Ctrl</kbd> <kbd>S</kbd> / <kbd>O</kbd> / <kbd>E</kbd> | Save (ReBirth `.rbs`), open, export WAV |
 | <kbd>⌘/Ctrl</kbd> <kbd>⇧</kbd> <kbd>S</kbd>, or Shift-click SAVE | Save as a Re-Rebirth session (`.json`) |

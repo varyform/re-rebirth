@@ -1,11 +1,11 @@
 // Session (de)serialisation: our own JSON format, also the target of the .rbs reader.
-import { BASS_IDS, DRUM_IDS, emptyBassPattern, emptyBassStep, emptyDrumPattern, PATTERN_COUNT, STEPS } from '../state.js';
+import { BASS_IDS, DRUM_IDS, emptyBassPattern, emptyBassStep, emptyDrumPattern, MAX_CHAIN, PATTERN_COUNT, STEPS } from '../state.js';
 import { TRACK_IDS } from './song.js';
 
 export const FORMAT = 're-rebirth';
 
 export function serialize(state) {
-  const device = (d) => ({ bank: d.bank, pattern: d.pattern, patterns: d.patterns });
+  const device = (d) => ({ bank: d.bank, pattern: d.pattern, chain: d.chain, chainPos: d.chainPos, patterns: d.patterns });
   return {
     format: FORMAT,
     version: 1,
@@ -48,6 +48,9 @@ function device(target, src, makePattern) {
   target.patterns = Array.from({ length: PATTERN_COUNT }, (_, i) => makePattern(src.patterns?.[i]));
   target.bank = num(src.bank, 0, 3, 0);
   target.pattern = num(src.pattern, 0, 7, 0);
+  const chain = Array.isArray(src.chain) ? src.chain.filter((i) => Number.isInteger(i) && i >= 0 && i < PATTERN_COUNT).slice(0, MAX_CHAIN) : [];
+  target.chain = chain.length > 1 ? chain : [];
+  target.chainPos = target.chain.length ? num(src.chainPos, 0, target.chain.length - 1, 0) : 0;
 }
 
 export function applySession(state, s) {
