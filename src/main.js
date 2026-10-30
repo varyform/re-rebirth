@@ -19,6 +19,12 @@ import { loadPrefs, savePrefs } from './ui/prefs.js';
 import { runShortcut } from './ui/shortcuts.js';
 import { stepKey } from './ui/step-keys.js';
 
+const COPY = {
+  loaded: 'Loaded',
+  // A song made for a mod plays its parts on the standard drums.
+  modSong: (mod) => `Made for ${mod} \u00B7 standard drums`,
+};
+
 // ?reset: forget every setting kept in the browser (stage, MIDI bindings and
 // what was learned about the controls), keeping the songs: the autosaved
 // session stays and the library lives in IndexedDB. Runs before anything
@@ -47,7 +53,8 @@ const files = new Files(state, {
   beforeLoad: () => clock.t.playing && clock.stop(),
   onLoaded: (_, file) => {
     syncStageMode({ loaded: true });
-    notify(state.info.title || state.info.file || 'Loaded');
+    const { mod } = state.info;
+    notify(mod ? COPY.modSong(mod) : state.info.title || state.info.file || COPY.loaded);
     library.current = null;
     if (file) remember(file).then((id) => (library.current = id));
     requestRender();

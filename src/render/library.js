@@ -1,6 +1,6 @@
 // Song library window: every song the library holds, grouped by the mod it was
-// made for (Standard ReBirth first, as those are the ones that play), sortable by
-// column, with a star rating. Songs we can't open are listed but dimmed.
+// made for (Standard ReBirth first; mod songs play on the standard drums),
+// sortable by column, with a star rating. Songs we can't open are listed but dimmed.
 import { OTHER_GROUP, pickSongs, SAVES_GROUP, shareFiles, STANDARD_GROUP } from '../song/library.js';
 import { hits } from '../ui/hits.js';
 import { click, release } from '../ui/handlers.js';
@@ -35,7 +35,7 @@ const COPY = {
   empty: 'NO SONGS YET',
   emptyHint: 'Drop .rbs files or whole folders on the window, or use ADD FILES / ADD FOLDER.',
   columns: { rating: 'RATING', title: 'TITLE', name: 'FILE', version: 'VER', tempo: 'BPM', bars: 'BARS' },
-  needsMod: "NEEDS THIS MOD'S SOUNDS \u00B7 CAN'T OPEN",
+  modDrums: 'MADE FOR THIS MOD \u00B7 PLAYS WITH STANDARD DRUMS',
   notSongs: "NOT REBIRTH 2.0 SONGS \u00B7 CAN'T OPEN",
 };
 
@@ -271,10 +271,9 @@ function drawGroup(ctx, g, y, W, view, collapsed) {
   const nw = textWidth(ctx, name, { size: 10, weight: 800, spacing: 0.8 });
   const count = `${g.songs.length} SONG${g.songs.length === 1 ? '' : 'S'}`;
   text(ctx, count, PAD + 42 + nw, cy, { size: 8, align: 'left', color: C.inkMuted, spacing: 0.4 });
-  if (!g.loadable) {
-    const why = g.name === OTHER_GROUP ? COPY.notSongs : COPY.needsMod;
-    text(ctx, why, W - PAD - 12, cy, { size: 8, align: 'right', color: C.inkMuted, spacing: 0.4 });
-  }
+  const isMod = groupRank(g.name) === 2;
+  const note = g.name === OTHER_GROUP ? COPY.notSongs : isMod && g.loadable ? COPY.modDrums : null;
+  if (note) text(ctx, note, W - PAD - 12, cy, { size: 8, align: 'right', color: C.inkMuted, spacing: 0.4 });
   hits.rect(ctx, PAD, y, W - PAD * 2, GROUP_H, tapOrScroll(view, () => (view.collapsed[g.name] = !collapsed)));
 }
 

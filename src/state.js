@@ -64,7 +64,8 @@ export class State {
       this.drums[id] = { bank: 0, pattern: 0, queued: null, selected: 'bd', patterns: Array.from({ length: PATTERN_COUNT }, emptyDrumPattern) };
     }
     this.song = emptySong();
-    this.info = { title: '', text: '', url: '', file: '' };
+    // `mod`: the ReBirth mod a song was made for, empty for the standard sounds.
+    this.info = { title: '', text: '', url: '', file: '', mod: '' };
     this.emit('reset', {});
   }
 

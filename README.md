@@ -100,7 +100,7 @@ Everything has a key, and <kbd>/</kbd> lists the ones that work where you are, i
 
 ## Song compatibility
 
-Re-Rebirth reads songs made with ReBirth 2.0 and 2.0.1 that use the standard sounds. Songs made for a ReBirth *mod* (custom samples and graphics) are refused, since their sounds can't be reproduced. Many songs are in the [nordbeat ReBirth archive](https://nordbeat.com/archive/rebirth/song_archives.htm).
+Re-Rebirth reads songs made with ReBirth 2.0 and 2.0.1. Songs made for a ReBirth *mod* (custom drum samples and graphics) play with the standard drums, since the mod's samples aren't ours to use; their bass lines, patterns and automation are all there. Saving one as `.rbs` keeps the mod's name, so ReBirth plays it with the mod again. Many songs are in the [nordbeat ReBirth archive](https://nordbeat.com/archive/rebirth/song_archives.htm).
 
 The file reader follows Propellerhead's format description ([`docs/RBS42.txt`](docs/RBS42.txt)). Where real files disagree with the description, the files win; those places are noted in [`src/song/rbs.js`](src/song/rbs.js).
 

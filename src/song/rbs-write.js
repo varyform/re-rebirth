@@ -127,9 +127,14 @@ function glob(s) {
   w.u32(6, toGlob(s.song.loopStart));
   w.u32(10, toGlob(s.song.loopEnd || s.song.length));
   w.u8(14, byte(s.params['song.shuffle'] ?? 0.5));
-  w.zstr(15, 65, STANDARD_MOD);
-  w.zstr(80, 201, 'ftp.propellerheads.se');
-  w.zstr(281, 201, 'www.propellerheads.se');
+  // A song made for a mod keeps its name, so ReBirth plays it with the mod's sounds
+  // again (it finds mods by name; the addresses are only shown).
+  const mod = s.info?.mod;
+  w.zstr(15, 65, mod || STANDARD_MOD);
+  if (!mod) {
+    w.zstr(80, 201, 'ftp.propellerheads.se');
+    w.zstr(281, 201, 'www.propellerheads.se');
+  }
   w.u8(482, (s.params['song.vintage'] ?? 0) >= 0.5 ? 1 : 0);
   return chunk('GLOB', w.bytes);
 }

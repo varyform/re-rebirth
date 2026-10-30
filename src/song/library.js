@@ -23,7 +23,7 @@ export function songMeta(buffer, name) {
     let meta;
     try {
       const info = rbsInfo(buffer);
-      meta = { ...base, title: info.title, group: info.mod || 'Unnamed mod', version: info.version, tempo: info.tempo };
+      meta = { ...base, title: info.title, group: info.mod || STANDARD_GROUP, version: info.version, tempo: info.tempo };
     } catch (err) {
       return { ...base, reason: err.message };
     }
@@ -96,6 +96,17 @@ export class Library {
     this.db = await openDb();
     this.items = await request(this.db.transaction(META).objectStore(META).getAll());
     this.onChange();
+    await this.recheck();
+  }
+
+  // Songs listed before mod songs could be opened (up to 0.8.5) were stored as
+  // unplayable: read them again.
+  async recheck() {
+    const stale = this.items.filter((s) => !s.loadable && /^unsupported mod/.test(s.reason ?? ''));
+    for (const meta of stale) {
+      const buffer = await request(this.db.transaction(DATA).objectStore(DATA).get(meta.id));
+      if (buffer) await this.update(meta.id, songMeta(buffer, meta.name));
+    }
   }
 
   find(id) {

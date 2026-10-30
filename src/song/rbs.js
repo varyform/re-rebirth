@@ -120,14 +120,15 @@ export function parseRbs(buffer, fileName = '') {
   const devl = find(top, 'CAT ', 'DEVL');
   const trkl = find(top, 'CAT ', 'TRKL');
   if (!glob || !devl) throw new Error('Song is missing its GLOB or DEVL section');
-  // Mods swap in their own samples and graphics, which we can't reproduce.
-  const mod = r.zstr(glob.at + 15, 65);
-  if (mod !== STANDARD_MOD) throw new Error(`unsupported mod "${mod}"`);
+  // A mod swaps in its own drum samples and graphics; everything else is standard
+  // ReBirth, so the song plays on our drums. `info.mod` names it (empty: standard).
+  const modName = r.zstr(glob.at + 15, 65);
+  const mod = modName === STANDARD_MOD ? '' : modName;
 
   const session = {
     format: 're-rebirth',
     version: 1,
-    info: { title: '', text: '', url: '', file: fileName },
+    info: { title: '', text: '', url: '', file: fileName, mod },
     transport: {},
     params: {},
     bass: {},

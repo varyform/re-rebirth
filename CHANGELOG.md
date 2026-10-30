@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Songs made for ReBirth mods open now,** instead of being refused. A mod only swaps in its own drum samples and graphics, so these songs play with the standard drums: their bass lines, patterns, mixer and automation are all there. Opening one says which mod it was made for, the library lists them as playable under their mod, and saving one as `.rbs` keeps the mod's name, so ReBirth plays it with the mod again. About half the songs in the ReBirth archives were made for a mod.
+
 ## 0.8.5 — 2026-10-30
 
 ### Sound
