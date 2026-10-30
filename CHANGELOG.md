@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.5 — 2026-10-30
 
 ### Sound
 - **Closer to ReBirth's engine,** following OpenRB-338's documentation of how ReBirth works inside:
