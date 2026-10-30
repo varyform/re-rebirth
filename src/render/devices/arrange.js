@@ -6,17 +6,18 @@ import { songBars, TICKS_PER_BAR } from '../../song/song.js';
 import { deleteBars, duplicateBars, insertBars, onAt, paintOn, paintPattern, patternAt, setLength } from '../../song/arrange-ops.js';
 import { hits } from '../../ui/hits.js';
 import { click } from '../../ui/handlers.js';
-import { line, MONO, panel, rgba, rrect, text, textWidth, vgrad } from '../primitives.js';
+import { line, MONO, panel, restoreLineScale, rgba, rrect, setLineScale, text, textWidth, vgrad } from '../primitives.js';
 import { C } from '../theme.js';
 import { tab } from './stage-bar.js';
 
 const T = TICKS_PER_BAR;
 const BANKS = 'ABCD';
 const PAD = 6;
+// The toolbar is laid out in chrome units, like AUTOMATE's timeline, so its
+// buttons come out the same size on screen (see `chromeK`).
 const TOOLS = { y: 5, h: 18 };
-const RULER_Y = 28;
+const TOOLS_BAND = 28; // chrome units from the top to the ruler
 const RULER_H = 14;
-const ROWS_Y = RULER_Y + RULER_H + 4;
 const LABEL_W = 70;
 const ON_H = 7;
 const ROW_GAP = 4;
@@ -46,8 +47,11 @@ export const rangeBars = (song) => (song.loopEnd > song.loopStart ? [song.loopSt
 const patternName = (i) => `${BANKS[Math.floor(i / 8)]}${(i % 8) + 1}`;
 
 export class Arrange {
-  constructor(state, app, x, y, w, h) {
-    Object.assign(this, { state, app, x, y, w, h });
+  // chromeK: device units per chrome unit (focus-view.js).
+  constructor(state, app, x, y, w, h, { chromeK = 1 } = {}) {
+    Object.assign(this, { state, app, x, y, w, h, chromeK });
+    this.rulerY = TOOLS_BAND * chromeK;
+    this.rowsY = this.rulerY + RULER_H + 4;
     state.ui.arrange ??= { from: 0, span: Math.max(songBars(state.song), 16) * T };
   }
 
@@ -84,15 +88,24 @@ export class Arrange {
 
     this.drawRuler(ctx, gx, gw, X, barAt);
     this.wheelFn = this.wheel(gw, barAt);
-    const rowsH = h - ROWS_Y - SCROLL_H - 8;
+    const rowsH = h - this.rowsY - SCROLL_H - 8;
     const rowH = (rowsH - ROW_GAP * (ROWS.length - 1)) / ROWS.length;
-    ROWS.forEach(([id, name], r) => this.drawRow(ctx, id, name, ROWS_Y + r * (rowH + ROW_GAP), rowH, gx, gw, X, barAt));
-    this.drawPlayhead(ctx, X, gx, gw, ROWS_Y, rowsH);
+    ROWS.forEach(([id, name], r) => this.drawRow(ctx, id, name, this.rowsY + r * (rowH + ROW_GAP), rowH, gx, gw, X, barAt));
+    this.drawPlayhead(ctx, X, gx, gw, this.rowsY, rowsH);
     this.drawScroll(ctx, gx, gw, h - SCROLL_H - 5, bars);
   }
 
   drawTools(ctx) {
-    const { state, app, w } = this;
+    ctx.save();
+    ctx.scale(this.chromeK, this.chromeK);
+    const lines = setLineScale(ctx);
+    this.drawToolsAt(ctx, this.w / this.chromeK);
+    restoreLineScale(lines);
+    ctx.restore();
+  }
+
+  drawToolsAt(ctx, w) {
+    const { state, app } = this;
     const { song } = state;
     const range = rangeBars(song);
     let x = PAD;
@@ -123,12 +136,12 @@ export class Arrange {
   drawRuler(ctx, gx, gw, X, barAt) {
     const { state, app } = this;
     const { song } = state;
-    rrect(ctx, gx, RULER_Y, gw, RULER_H, 2);
-    ctx.fillStyle = vgrad(ctx, RULER_Y, RULER_Y + RULER_H, C.lcdGreen);
+    rrect(ctx, gx, this.rulerY, gw, RULER_H, 2);
+    ctx.fillStyle = vgrad(ctx, this.rulerY, this.rulerY + RULER_H, C.lcdGreen);
     ctx.fill();
     ctx.save();
     ctx.beginPath();
-    ctx.rect(gx, RULER_Y, gw, RULER_H);
+    ctx.rect(gx, this.rulerY, gw, RULER_H);
     ctx.clip();
     const view = this.view;
     const pxPerBar = (gw * T) / view.span;
@@ -137,13 +150,13 @@ export class Arrange {
     ctx.lineWidth = 1;
     for (let b = Math.floor(view.from / T / step) * step; b * T <= view.from + view.span; b += step) {
       const bx = Math.round(X(b * T)) + 0.5;
-      line(ctx, bx, RULER_Y + RULER_H - 4, bx, RULER_Y + RULER_H);
-      text(ctx, String(b + 1), bx + 2, RULER_Y + RULER_H / 2 - 1, { size: 6, weight: 700, family: MONO, align: 'left', color: C.lcdGreenMid });
+      line(ctx, bx, this.rulerY + RULER_H - 4, bx, this.rulerY + RULER_H);
+      text(ctx, String(b + 1), bx + 2, this.rulerY + RULER_H / 2 - 1, { size: 6, weight: 700, family: MONO, align: 'left', color: C.lcdGreenMid });
     }
     const hasRange = song.loopEnd > song.loopStart;
     if (hasRange) {
       ctx.fillStyle = rgba(C.ledYellow, 0.22);
-      ctx.fillRect(X(song.loopStart), RULER_Y, X(song.loopEnd) - X(song.loopStart), RULER_H);
+      ctx.fillRect(X(song.loopStart), this.rulerY, X(song.loopEnd) - X(song.loopStart), RULER_H);
     }
     ctx.restore();
     if (hasRange) {
@@ -183,16 +196,16 @@ export class Arrange {
         };
       },
     };
-    hits.rect(ctx, gx - 5, RULER_Y - 5, gw + 10, RULER_H + 5, handler);
+    hits.rect(ctx, gx - 5, this.rulerY - 5, gw + 10, RULER_H + 5, handler);
   }
 
   marker(ctx, x, label, color) {
     const w = label.length > 1 ? textWidth(ctx, label, { size: 5.5, weight: 900 }) + 6 : 10;
     ctx.fillStyle = color;
-    ctx.fillRect(Math.round(x) - 0.5, RULER_Y, 1.5, RULER_H);
-    rrect(ctx, x - w / 2, RULER_Y - 5, w, 9, 1.5);
+    ctx.fillRect(Math.round(x) - 0.5, this.rulerY, 1.5, RULER_H);
+    rrect(ctx, x - w / 2, this.rulerY - 5, w, 9, 1.5);
     ctx.fill();
-    text(ctx, label, x, RULER_Y - 0.5, { size: label.length > 1 ? 5.5 : 6.5, weight: 900, color: C.bassInk });
+    text(ctx, label, x, this.rulerY - 0.5, { size: label.length > 1 ? 5.5 : 6.5, weight: 900, color: C.bassInk });
   }
 
   drawRow(ctx, id, name, y, h, gx, gw, X, barAt) {
@@ -310,7 +323,7 @@ export class Arrange {
     if (px < gx || px > gx + gw) return;
     ctx.strokeStyle = rgba(C.ledGreen, 0.9);
     ctx.lineWidth = 1;
-    line(ctx, Math.round(px) + 0.5, RULER_Y, Math.round(px) + 0.5, y + h);
+    line(ctx, Math.round(px) + 0.5, this.rulerY, Math.round(px) + 0.5, y + h);
   }
 
   // Where the view sits in the song; drag to scroll.

@@ -220,7 +220,8 @@ export class ArrangeView extends FocusView {
   }
 
   buildBody({ x, y, w, h }) {
-    return [new Arrange(this.state, this.app, x, y, w, h)];
+    // The toolbar matches AUTOMATE's timeline: chrome size.
+    return [new Arrange(this.state, this.app, x, y, w, h, { chromeK: this.k })];
   }
 }
 

@@ -8,6 +8,9 @@
   - Picking a single pattern, CLEAR CHAIN or ⌫ in the picker ends the chain.
   - Chains play in pattern mode (PATTERNS, or the rack in PATTERN mode); song mode plays the song. They're kept in Re-Rebirth's own session files; a `.rbs` has no room for them, and saving one says so.
 
+### Changed
+- ARRANGE's toolbar buttons (DUPLICATE, DELETE, INSERT, UNDO, FIT) are now the same size as AUTOMATE's, and the song's rows get the room they gave up.
+
 ## 0.9.2 — 2026-10-30
 
 ### Changed
