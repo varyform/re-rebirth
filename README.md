@@ -42,7 +42,7 @@ Set an A–B loop on the song timeline, arm REC and play: the loop goes round, a
 
 ![MIX: four channel strips, effects and master](docs/screenshots/mix.png)
 
-The four channel strips with long faders and SOLO, the effects and the master with its VU needles, all large. Controls the song automates carry an orange dot. **EXPORT** on the bar renders the song, the A–B loop or the patterns to a WAV with the same engine, faster than real time (on iPad, through the share sheet).
+The four channel strips with long faders and SOLO, the effects and the master with its VU needles, all large. Controls the song automates carry an orange dot. **EXPORT** on the bar renders the song, the A–B loop or the patterns to a WAV with the same engine, faster than real time (on iPad, through the share sheet), or to stems for a DAW: one WAV per machine plus the delay's echoes, in a ZIP, that add up to the mix.
 
 ### MIDI controllers
 

@@ -4,10 +4,19 @@ export const INSERTS = ['dist', 'comp', 'pcf'];
 // Pattern filter modes: 0 = bandpass, 1 = lowpass.
 export const PCF_TYPES = ['bandpass', 'lowpass'];
 
+// Seeded, so every render of a song is the same to the sample: stems add up to
+// the mix only if their drums hiss alike.
 export function whiteNoise(ctx, seconds) {
   const buf = ctx.createBuffer(1, Math.floor(ctx.sampleRate * seconds), ctx.sampleRate);
   const data = buf.getChannelData(0);
-  for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  let seed = 0x9e3779b9;
+  for (let i = 0; i < data.length; i++) {
+    // mulberry32
+    seed = (seed + 0x6d2b79f5) | 0;
+    let x = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    data[i] = (((x ^ (x >>> 14)) >>> 0) / 4294967296) * 2 - 1;
+  }
   return buf;
 }
 

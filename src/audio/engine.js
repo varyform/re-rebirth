@@ -121,6 +121,9 @@ export class AudioEngine {
     this.state = state;
     this.ctx = null;
     this.last = new WeakMap();
+    // Offline stem renders: a channel id (that channel alone, dry) or 'delay' (only
+    // the echoes of every channel). Null plays everything.
+    this.stem = null;
     // The song's sound model: 0 "ReBirth 2.0", 1 "Vintage ReBirth" (see bass-voice.js).
     state.define('song.vintage', 0);
   }
@@ -152,6 +155,8 @@ export class AudioEngine {
     this.masterMeter = this.stereoMeter(clipper);
     this.spectrum = this.spectrumAnalyser(clipper);
     this.masterInserts = new InsertChain(ctx, this.masterBus, this.masterFader);
+    // Stems go through the same limiter and clipper: below their thresholds both
+    // are linear (the limiter's make-up gain included), so stems add up to the mix.
     this.masterFader.connect(this.volume).connect(limiter).connect(clipper).connect(ctx.destination);
 
     this.delay = createDelay(ctx);
@@ -183,8 +188,10 @@ export class AudioEngine {
       // Before the mute: what the channel would sound like, for the ghosted
       // meters of muted / switched-off machines.
       const ghost = this.stereoMeter(pan.out);
+      // The sends gate themselves (see sync), so a stem can keep a channel's echoes
+      // and silence the channel, or the other way round.
       fader.connect(sendPre).connect(send);
-      mute.connect(sendPost).connect(send);
+      pan.out.connect(sendPost).connect(send);
       send.connect(this.delay.in);
       this.channels[id] = { label, input, inserts, pan, fader, mute, send, sendPre, sendPost, meter, ghost };
     }
@@ -341,9 +348,12 @@ export class AudioEngine {
       set(ch.fader.gain, faderGain(g(`mixer.${id}.level`)));
       // Measured: send 64 echoes 5.1 dB below send 127, close to linear amplitude.
       set(ch.send.gain, g(`mixer.${id}.delay`));
-      set(ch.mute.gain, ch.audible ? 1 : 0, 0.005);
-      set(ch.sendPre.gain, ch.audible && !vintage ? 1 : 0, 0.005);
-      set(ch.sendPost.gain, vintage ? 1 : 0, 0.005);
+      // Stem renders keep one channel without its echoes, or only the echoes.
+      const dry = ch.audible && (!this.stem || this.stem === id);
+      const wet = ch.audible && (!this.stem || this.stem === 'delay');
+      set(ch.mute.gain, dry ? 1 : 0, 0.005);
+      set(ch.sendPre.gain, wet && !vintage ? 1 : 0, 0.005);
+      set(ch.sendPost.gain, wet && vintage ? 1 : 0, 0.005);
     }
     set(this.masterFader.gain, masterGain(g('mixer.master.level')));
     set(this.volume.gain, g('master.volume') ** 2 * 0.8);

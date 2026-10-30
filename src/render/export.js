@@ -1,8 +1,11 @@
 // EXPORT window: renders the song, the A-B loop or the current patterns
-// offline with the real engine to a WAV, then hands over the file (download,
-// or the share sheet on iPad/iPhone). Below, the song as a ReBirth .rbs.
-import { renderSession, wavBlob } from '../audio/offline.js';
+// offline with the real engine to a WAV, or to stems (one WAV per channel and
+// one for the delay, in a ZIP), then hands over the file (download, or the
+// share sheet on iPad/iPhone). Below, the song as a ReBirth .rbs.
+import { peakDb, renderSession, wavBlob, wavParts } from '../audio/offline.js';
+import { CHANNELS } from '../channels.js';
 import { shareFiles } from '../song/library.js';
+import { zipBlob } from '../song/zip.js';
 import { serialize } from '../song/session.js';
 import { songBars, TICKS_PER_BAR } from '../song/song.js';
 import { hits } from '../ui/hits.js';
@@ -22,14 +25,22 @@ const COPY = {
   loop: 'LOOP A\u2013B',
   patterns: 'PATTERNS',
   bars: 'BARS',
+  mix: 'MIX',
+  stems: 'STEMS',
   render: 'RENDER',
   rendering: 'RENDERING\u2026',
+  renderingStem: (label, i, n) => `${label} \u00B7 ${i} OF ${n}`,
   save: 'SAVE WAV',
+  saveZip: 'SAVE ZIP',
   close: 'CLOSE',
   again: 'RENDER AGAIN',
   noSong: 'NO SONG YET: RECORD ONE, OR EXPORT THE PATTERNS',
-  summary: (bars, secs) => `${bars} BARS \u00B7 ${formatTime(secs)} \u00B7 48 KHZ 16-BIT STEREO`,
-  done: (peak) => `DONE \u00B7 PEAK ${peak > -0.05 ? '0.0' : peak.toFixed(1)} DBFS${peak > -0.05 ? ' \u00B7 CLIPPED, TURN THE MASTER DOWN' : ''}`,
+  summary: (bars, secs, stems) => `${bars} BARS \u00B7 ${formatTime(secs)} \u00B7 ${stems ? 'STEMS, ONE WAV EACH, IN A ZIP' : '48 KHZ 16-BIT STEREO'}`,
+  done: (peak, stems) =>
+    `DONE${stems ? ` \u00B7 ${stems} STEMS` : ''} \u00B7 PEAK ${peak > -0.05 ? '0.0' : peak.toFixed(1)} DBFS${peak > -0.05 ? ' \u00B7 CLIPPED, TURN THE MASTER DOWN' : ''}`,
+  // File names for the stems; the delay stem holds every channel's echoes.
+  stemNames: { bass1: 'Bass Line 1', bass2: 'Bass Line 2', r808: 'Drum 08', r909: 'Drum 09', delay: 'Delay' },
+  stemLabel: (id) => (id === 'delay' ? 'DELAY' : CHANNELS.find(([c]) => c === id)[1]),
   failed: (msg) => `FAILED: ${msg}`.toUpperCase(),
   rbs: 'REBIRTH SONG',
   rbsHint: 'PATTERNS, ARRANGEMENT, KNOBS AND AUTOMATION, FOR REBIRTH 2.0.1',
@@ -52,7 +63,7 @@ const formatTime = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).pa
 export function openExport(state) {
   const { song } = state;
   const range = song.length ? 'song' : 'patterns';
-  state.ui.export = { range, bars: 8, status: 'idle', progress: 0, file: null, peak: 0, error: '' };
+  state.ui.export = { range, bars: 8, stems: false, status: 'idle', progress: 0, stem: '', file: null, peak: 0, count: 0, error: '' };
 }
 
 export const closeExport = (state) => (state.ui.export = null);
@@ -68,30 +79,42 @@ function rangeOf(state, view) {
   return { startBar: 1, bars: view.bars, mode: 'pattern' };
 }
 
-const fileName = (state, view) => {
-  const { info } = state;
-  const base = (info.title || info.file.replace(/\.[^.]+$/, '') || 'untitled').replace(/[\\/:*?"<>|]+/g, '_');
-  return `${base}${view.range === 'song' ? '' : view.range === 'loop' ? ' (loop)' : ' (patterns)'}.wav`;
-};
+// Named after the song's file, like saves: a ReBirth song's title is often a credit.
+const baseName = (app, view) => `${app.files.baseName()}${view.range === 'song' ? '' : view.range === 'loop' ? ' (loop)' : ' (patterns)'}`;
+
+// A stem that never makes a sound (a machine the song doesn't use) is left out.
+const SILENT_DB = -90;
+const STEMS = [...CHANNELS.map(([id]) => id), 'delay'];
 
 async function render(state, app) {
   const view = state.ui.export;
   const range = rangeOf(state, view);
   if (!range) return;
-  Object.assign(view, { status: 'rendering', progress: 0, file: null, error: '' });
+  Object.assign(view, { status: 'rendering', progress: 0, stem: '', file: null, error: '' });
   app.redraw();
   try {
     const session = serialize(state);
     const prepare = (s) => Object.assign(s.transport, { mode: range.mode, loop: false });
-    const onProgress = (p) => {
-      view.progress = p;
-      app.redraw();
-    };
-    const { buffer } = await renderSession(session, { startBar: range.startBar, bars: range.bars, tail: TAIL, prepare, onProgress });
-    let peak = 0;
-    for (let c = 0; c < buffer.numberOfChannels; c++) for (const s of buffer.getChannelData(c)) peak = Math.max(peak, Math.abs(s));
-    const file = new File([wavBlob(buffer)], fileName(state, view), { type: 'audio/wav' });
-    if (state.ui.export === view) Object.assign(view, { status: 'done', file, peak: 20 * Math.log10(peak || 1e-9) });
+    const opts = { startBar: range.startBar, bars: range.bars, tail: TAIL, prepare };
+    const base = baseName(app, view);
+    const stems = view.stems ? STEMS : [null];
+    const files = [];
+    let peak = -Infinity;
+    for (const [i, stem] of stems.entries()) {
+      if (stem) view.stem = COPY.renderingStem(COPY.stemLabel(stem), i + 1, stems.length);
+      const onProgress = (p) => {
+        view.progress = (i + p) / stems.length;
+        app.redraw();
+      };
+      const { buffer } = await renderSession(session, { ...opts, stem, onProgress });
+      if (state.ui.export !== view) return;
+      const db = peakDb(buffer);
+      if (stem && db < SILENT_DB) continue;
+      peak = Math.max(peak, db);
+      files.push(stem ? { name: `${base} - ${COPY.stemNames[stem]}.wav`, parts: wavParts(buffer) } : new File([wavBlob(buffer)], `${base}.wav`, { type: 'audio/wav' }));
+    }
+    const file = view.stems ? new File([zipBlob(files)], `${base} (stems).zip`, { type: 'application/zip' }) : files[0];
+    Object.assign(view, { status: 'done', file, peak, count: view.stems ? files.length : 0 });
   } catch (err) {
     console.error(err);
     Object.assign(view, { status: 'error', error: err.message });
@@ -141,6 +164,11 @@ export function drawExport(ctx, rackW, rackH, state, app) {
       x += option(ctx, x, 76, 34, String(bars), view.bars === bars, busy ? null : () => Object.assign(view, { bars, status: 'idle', file: null }), `export.bars.${bars}`) + 6;
     }
   }
+  // The whole mix in one file, or stems.
+  x = W - 24 - 50 * 2 - 6;
+  for (const [stems, text_] of [[false, COPY.mix], [true, COPY.stems]]) {
+    x += option(ctx, x, 76, 50, text_, view.stems === stems, busy ? null : () => Object.assign(view, { stems, status: 'idle', file: null }), `export.stems.${stems}`) + 6;
+  }
 
   // Readout: what it'll be, progress, or the result
   const range = rangeOf(state, view);
@@ -150,8 +178,9 @@ export function drawExport(ctx, rackW, rackH, state, app) {
     text(ctx, COPY.noSong, W / 2, 119.5, { ...mono, color: C.lcdGreenMid });
   } else {
     const secs = (range.bars * 16 * 60) / state.transport.tempo / 4 + TAIL;
-    text(ctx, COPY.summary(range.bars, secs), W / 2, 113, mono);
-    const line2 = view.status === 'rendering' ? null : view.status === 'done' ? COPY.done(view.peak) : view.status === 'error' ? COPY.failed(view.error) : '';
+    const top = busy && view.stem ? view.stem : COPY.summary(range.bars, secs, view.stems);
+    text(ctx, top, W / 2, 113, mono);
+    const line2 = view.status === 'rendering' ? null : view.status === 'done' ? COPY.done(view.peak, view.count) : view.status === 'error' ? COPY.failed(view.error) : '';
     if (line2 !== null) text(ctx, line2, W / 2, 125.5, { ...mono, size: 6, color: view.status === 'error' || view.peak > -0.05 ? C.ledYellow : C.lcdGreenMid });
     else {
       rrect(ctx, 34, 122, W - 68, 6, 2);
@@ -171,7 +200,7 @@ export function drawExport(ctx, rackW, rackH, state, app) {
   const bx = (W - mainW - gap - closeW) / 2;
   if (view.status === 'done') {
     // Share/download needs the release of a tap on iOS (see `release`).
-    actionButton(ctx, bx, by, mainW, COPY.save, release(() => saveFile(view.file), 'export.save'), 'export.save', true);
+    actionButton(ctx, bx, by, mainW, view.file.name.endsWith('.zip') ? COPY.saveZip : COPY.save, release(() => saveFile(view.file), 'export.save'), 'export.save', true);
   } else {
     const label_ = busy ? COPY.rendering : view.status === 'idle' ? COPY.render : COPY.again;
     actionButton(ctx, bx, by, mainW, label_, range && !busy ? click(() => render(state, app), 'export.render') : null, 'export.render', !!range && !busy);

@@ -10,10 +10,11 @@ import { AudioEngine } from './engine.js';
 const SLICE = 0.1; // seconds scheduled per step of the render, like the live lookahead
 
 // session: a serialized session. prepare(state) may adjust it before playing.
-// onProgress(0..1) is called as the render goes.
-export async function renderSession(session, { startBar = 1, bars = 16, sampleRate = 48000, tail = 1, prepare, onProgress } = {}) {
+// onProgress(0..1) is called as the render goes. stem: see AudioEngine.stem.
+export async function renderSession(session, { startBar = 1, bars = 16, sampleRate = 48000, tail = 1, prepare, onProgress, stem = null } = {}) {
   const state = new State();
   const engine = new AudioEngine(state);
+  engine.stem = stem;
   const clock = new Clock(state, engine);
   // Controls register parameter defaults: build the rack before loading.
   new Rack(state, { clock, engine, files: {} });
@@ -57,6 +58,13 @@ export async function renderSession(session, { startBar = 1, bars = 16, sampleRa
   return { buffer, tempo: state.transport.tempo };
 }
 
+// Loudest sample, in dBFS.
+export function peakDb(buffer) {
+  let peak = 0;
+  for (let c = 0; c < buffer.numberOfChannels; c++) for (const s of buffer.getChannelData(c)) peak = Math.max(peak, Math.abs(s));
+  return 20 * Math.log10(peak || 1e-9);
+}
+
 // Interleaved 16-bit PCM, clipped to full scale.
 export function pcm16(buffer) {
   const L = buffer.getChannelData(0);
@@ -70,6 +78,11 @@ export function pcm16(buffer) {
 }
 
 export function wavBlob(buffer) {
+  return new Blob(wavParts(buffer), { type: 'audio/wav' });
+}
+
+// A WAV file's bytes as [header, samples].
+export function wavParts(buffer) {
   const pcm = pcm16(buffer);
   const header = new DataView(new ArrayBuffer(44));
   const ascii = (o, s) => [...s].forEach((c, i) => header.setUint8(o + i, c.charCodeAt(0)));
@@ -86,5 +99,5 @@ export function wavBlob(buffer) {
   header.setUint16(34, 16, true);
   ascii(36, 'data');
   header.setUint32(40, pcm.byteLength, true);
-  return new Blob([header, pcm], { type: 'audio/wav' });
+  return [new Uint8Array(header.buffer), new Uint8Array(pcm.buffer)];
 }

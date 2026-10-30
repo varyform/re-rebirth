@@ -57,8 +57,12 @@ function chain(...nodes) {
   return nodes[nodes.length - 1];
 }
 
+// Noise starts somewhere new for each hit, picked from the hit's time rather than
+// at random, so a song renders the same every time (stems add up to the mix).
+const noiseOffset = (t, duration) => ((t * 7919.618) % 1) * (duration - 0.1);
+
 function run(v, src, dur) {
-  if (src.buffer) src.start(v.t, Math.random() * (src.buffer.duration - 0.1));
+  if (src.buffer) src.start(v.t, noiseOffset(v.t, src.buffer.duration));
   else src.start(v.t);
   src.stop(v.t + dur);
   if (v.t + dur >= v.end) {

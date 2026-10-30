@@ -12,6 +12,10 @@
   - In PATTERNS: Shift ← → shifts, Shift R reverses, ⌘/Ctrl D doubles, Shift ↑ ↓ transposes (⌘/Ctrl Shift ↑ ↓ an octave).
   - ⌘/Ctrl Z undoes them, and CLEAR, PASTE and RANDOM too. Undo now works in PATTERNS as well.
 - The typing hint in PATTERNS sits under the step grid, where it has room.
+- **Export stems** for mixing in a DAW: STEMS in the EXPORT window renders one WAV per machine (each with its effects, without its echoes) and one with the delay's echoes, all the same length, in a ZIP. Machines that stay silent are left out. Played together, the stems add up to the mix, unless the mix was loud enough to hit the safety limiter or the compressor sits on the master.
+
+### Changed
+- Every render of a song is now identical, down to the drums' noise, so stems line up with the mix. Exported files are named after the song's file, like saves, rather than its title, which is often a credit.
 
 ## 0.8.5 — 2026-10-30
 
