@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.1 — 2026-10-30
 
 ### New
 - **Song information:** ⓘ at the end of the song display's title line, or ⌘/Ctrl I, opens it.
