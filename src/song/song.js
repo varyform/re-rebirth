@@ -48,15 +48,27 @@ export function eraseRange(events, from, to, match) {
   }
 }
 
-// Every key the song automates (pattern changes excluded), cached per song
-// until its event count changes (recording, undo, another song).
+// Every key the song moves (pattern changes excluded): one with two or more
+// values, or a single one set after the start. ReBirth songs record a starting
+// value for many knobs that then never change; those don't count. Cached per
+// song until its event count changes (recording, undo, another song).
 const automatedCache = new WeakMap();
 export function automatedKeys(song) {
   const stamp = TRACK_IDS.map((id) => song.tracks[id].length).join(',');
   const hit = automatedCache.get(song);
   if (hit?.stamp === stamp) return hit.keys;
+  const first = new Map(); // key -> its first event
   const keys = new Set();
-  for (const id of TRACK_IDS) for (const e of song.tracks[id]) if (e.key !== 'pattern') keys.add(e.key);
+  for (const id of TRACK_IDS) {
+    for (const e of song.tracks[id]) {
+      if (e.key === 'pattern' || keys.has(e.key)) continue;
+      const f = first.get(e.key);
+      if (!f) {
+        first.set(e.key, e);
+        if (e.tick > 0) keys.add(e.key);
+      } else if (e.value !== f.value) keys.add(e.key);
+    }
+  }
   automatedCache.set(song, { stamp, keys });
   return keys;
 }

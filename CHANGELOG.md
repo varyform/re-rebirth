@@ -7,6 +7,7 @@
 - The rack's metal side rails now frame every stage, not only the rack, at the rack's size and with its margins above and below, so switching stages no longer shifts the frame.
 - **Picking an instrument on the rail no longer switches it off by mistake:** a click anywhere on a machine's strip shows it, and its ON switch is now a small, darker button of its own at the top (it used to take the strip's whole top edge).
 - **Solo switches the other machines off,** instead of being a hidden listening mode: their ON lights go out, so what you see is what you hear. Solo again and the machines it switched off come back (the ones that were off before stay off). SOLO in MIX, Shift M and the new **Option/Alt-click on a rail strip** all do this. Because it uses the machines' ON switches, a solo during recording is recorded like any ON switch.
+- The orange dot on a control now means the song actually moves it. ReBirth songs record a starting value for many knobs that never change after it; those no longer get a dot (in KiloMix '98, 55 dots instead of 110).
 
 ## 0.9.1 — 2026-10-30
 
