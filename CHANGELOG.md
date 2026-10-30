@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Sound
+- **Closer to ReBirth's engine,** following OpenRB-338's documentation of how ReBirth works inside:
+  - Pan no longer makes a channel louder: the side you turn towards keeps its level and the other one fades, as in ReBirth. Panned channels were up to 6 dB too loud, so songs with panned parts now play quieter and closer to ReBirth's balance (bass line 1 of KiloMix '98 now matches ReBirth's export to within 1 dB).
+  - The delay is mono, as in ReBirth: what goes in is the channels before their pan, and the echoes are panned with the delay's PAN knob.
+  - The tune knob moves in semitones both ways (it used to bend smoothly below the centre), with a flat stretch around the middle and an octave at each end.
+  - Bass lines play rests and slides the way ReBirth does: a slide into a rest bends to the rest's note as the note dies away, and after a rest that has its slide set, the next note glides in without restarting its filter sweep.
+  - The channel faders and the master fader follow ReBirth's level curve exactly. Masters above 100 are louder and below 100 quieter than before; at 100 nothing changes.
+  - Songs saved with ReBirth's "Vintage" sound play with it: the bass lines' notes start and stop more abruptly, and their resonance moves in eight steps. Saving a song as `.rbs` keeps the setting.
+
 ## 0.8.0 — 2026-10-25
 
 ### Fixed

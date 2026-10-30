@@ -11,18 +11,23 @@
 // Note 0 at the centre tune position: C2 (C with octave -1 plays 32.7 Hz).
 const BASE_MIDI = 36;
 
-// Tune knob (0..127, centre 64), fitted to a ReBirth recording at 42, 64, 66,
-// 111 and 127 (measured -330, 0, 0, +900, +1200 cents). Upwards it moves in whole
-// semitones up to +1 octave; downwards it's continuous, scaling frequency
-// linearly (half speed at 0).
+// Tune knob (0..127): whole semitones, one per 4 knob steps, with a dead zone of
+// 6 positions around the centre and an octave at each end (ReBirth.dll's tune
+// table, as documented by OpenRB-338). Agrees with a ReBirth recording at 42, 64,
+// 66, 111 and 127 (measured -330, 0, 0, +900, +1200 cents).
 function tuneCents(knob) {
-  const u = knob * 127 - 64;
-  if (u >= 0) return Math.round((u * 12) / 63) * 100;
-  return 1200 * Math.log2(1 + u / 128);
+  const i = Math.min(127, Math.max(0, Math.round(knob * 127))) >> 2;
+  const semis = i < 13 ? Math.max(-12, i - 13) : i > 18 ? Math.min(12, i - 18) : 0;
+  return semis * 100;
 }
 
 const GATE = 0.5; // fraction of a step the gate stays open
 const RELEASE = 0.022; // VCA release time constant after the gate closes, seconds
+// "Vintage ReBirth sound" (the song's sound model): the VCA opens and closes with a
+// 0.86 ms time constant, and resonance moves in 8 steps instead of smoothly. The
+// rest of the voice is the same (ReBirth.dll, as documented by OpenRB-338).
+const VINTAGE_AMP = 0.00086;
+const vintageResonance = (r) => (Math.round(r * 127) >> 4) / 7;
 const GLIDE = 0.017; // slide time constant, seconds; exponential in pitch, not Hz
 const LEVEL = 1.244; // overall level, matched to the test song at mixer level 80
 
@@ -136,15 +141,19 @@ export class BassVoice {
     this.osc.start();
     this.pitch.start();
     this.env.start();
-    this.sliding = false;
+    this.slide = false; // the last step's slide flag: the next step is legato
+    this.open = false; // the gate (as scheduled up to the last step)
+    this.vintage = false;
   }
 
   // Continuous controls. `set(param, value)` smooths and skips unchanged values.
   setParams(p, set) {
-    const { fa, pole, gainDb, q0, q1 } = filterShape(p.cutoff, p.resonance);
+    this.vintage = p.vintage;
+    const resonance = p.vintage ? vintageResonance(p.resonance) : p.resonance;
+    const { fa, pole, gainDb, q0, q1 } = filterShape(p.cutoff, resonance);
     const shift = ENV_BASE_SHIFT * p.envmod;
     const base = 2 ** shift;
-    const q2 = 0.1 + 0.15 * p.resonance;
+    const q2 = 0.1 + 0.15 * resonance;
     set(this.f1.frequency, fa * base);
     // Lowpass Q is in dB. Its env-driven part saturates at Q_MAX_C.
     const c = Math.min(Q_MAX_C, p.cutoff + shift / OCTAVES);
@@ -160,34 +169,38 @@ export class BassVoice {
     if (this.wave !== wave) this.osc.setPeriodicWave(this.waves[(this.wave = wave)]);
   }
 
+  // Every step is a note-on, as in ReBirth.dll (documented by OpenRB-338): a rest or
+  // a tie (a pause after a slide) still takes the step's pitch and slide flag; only a
+  // played step opens the gate. After a step with its slide flag set, the next one is
+  // legato: the pitch glides and the filter envelope isn't retriggered, even when a
+  // slid rest came between. The gate closes half a step in unless the step slides.
   step(s, next, t, stepDur, p) {
-    if (!s.gate) {
-      if (this.sliding) this.release(t);
-      return;
-    }
-    // A tie holds the previous note: no new pitch, no retrigger, gate stays open.
-    // Whether the *next* note slides in depends on this held step's own slide flag.
-    if (s.tie && this.holding) {
-      this.holding = !!next.tie;
-      this.sliding = s.slide && next.gate && !next.tie;
-      if (!this.holding && !this.sliding) this.close(t + stepDur * GATE);
-      return;
-    }
+    const rest = !s.gate || s.tie;
+    const legato = this.slide;
     const cents = (s.note + s.octave * 12) * 100;
     const pitch = this.pitch.offset;
-    const triggered = !this.sliding;
-    if (this.sliding) {
+    if (legato) {
       pitch.setTargetAtTime(cents, t, GLIDE);
     } else {
       pitch.cancelScheduledValues(t);
       pitch.setValueAtTime(cents, t);
-      this.trigger(t, s.accent, p);
     }
-    // A slide into a following note holds the gate and skips the retrigger.
-    this.sliding = s.slide && next.gate && !next.tie;
-    this.holding = !!next.tie;
-    if (!this.sliding && !this.holding) this.close(t + stepDur * GATE);
-    else if (triggered && s.accent) this.vca.gain.setTargetAtTime(1, t + stepDur, 0.004);
+    if (!rest && !legato) {
+      this.trigger(t, s.accent, p);
+      // A slid accent's VCA boost drops back at the next step.
+      if (s.accent && s.slide) this.vca.gain.setTargetAtTime(1, t + stepDur, 0.004);
+    } else if (!rest && !this.open) {
+      this.openGate(t);
+    }
+    if (!rest) this.open = true;
+    this.slide = !!s.slide;
+    if (!s.slide && this.open) this.close(t + stepDur * GATE);
+  }
+
+  // A single note for previews: never legato, never held.
+  audition(s, t, dur, p) {
+    this.slide = false;
+    this.step({ ...s, slide: false }, null, t, dur, p);
   }
 
   trigger(t, accent, p) {
@@ -204,17 +217,29 @@ export class BassVoice {
     const gain = this.vca.gain;
     gain.cancelScheduledValues(t);
     gain.setValueAtTime(0, t);
-    gain.linearRampToValueAtTime(1 + acc * ACCENT_GAIN, t + 0.001);
+    if (this.vintage) gain.setTargetAtTime(1 + acc * ACCENT_GAIN, t, VINTAGE_AMP);
+    else gain.linearRampToValueAtTime(1 + acc * ACCENT_GAIN, t + 0.001);
     if (acc) gain.setTargetAtTime(1, t + 0.001, ACCENT_GAIN_TAU);
   }
 
+  // A legato note after the gate had closed (a slid rest came between): the VCA
+  // opens again, the filter envelope carries on where it was.
+  openGate(t) {
+    const gain = this.vca.gain;
+    hold(gain, t);
+    if (this.vintage) gain.setTargetAtTime(1, t, VINTAGE_AMP);
+    else gain.linearRampToValueAtTime(1, t + 0.001);
+  }
+
   close(t) {
-    this.vca.gain.setTargetAtTime(0, t, RELEASE);
+    this.open = false;
+    this.vca.gain.setTargetAtTime(0, t, this.vintage ? VINTAGE_AMP : RELEASE);
   }
 
   release(t) {
-    this.sliding = false;
+    this.slide = false;
+    this.open = false;
     hold(this.vca.gain, t);
-    this.vca.gain.setTargetAtTime(0, t, RELEASE);
+    this.vca.gain.setTargetAtTime(0, t, this.vintage ? VINTAGE_AMP : RELEASE);
   }
 }

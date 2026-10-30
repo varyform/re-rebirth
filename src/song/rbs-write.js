@@ -130,6 +130,7 @@ function glob(s) {
   w.zstr(15, 65, STANDARD_MOD);
   w.zstr(80, 201, 'ftp.propellerheads.se');
   w.zstr(281, 201, 'www.propellerheads.se');
+  w.u8(482, (s.params['song.vintage'] ?? 0) >= 0.5 ? 1 : 0);
   return chunk('GLOB', w.bytes);
 }
 

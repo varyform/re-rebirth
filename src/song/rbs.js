@@ -143,6 +143,8 @@ export function parseRbs(buffer, fileName = '') {
   session.song.loopStart = toTicks(r.u32(g + 6));
   session.song.loopEnd = toTicks(r.u32(g + 10));
   P['song.shuffle'] = knob(r.u8(g + 14));
+  // The sound model: 0 "ReBirth 2.0 sound", 1 "Vintage ReBirth sound" (0 before 2.0.1).
+  P['song.vintage'] = r.u8(g + 482) ? 1 : 0;
 
   const usri = find(top, 'USRI');
   if (usri) {

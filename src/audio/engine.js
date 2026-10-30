@@ -11,7 +11,7 @@ import { BASS_IDS, DRUM_IDS, HIT } from '../state.js';
 import { BassVoice } from './bass-voice.js';
 import { KITS, playHit } from './drums.js';
 import { loadCompressor } from './compressor.js';
-import { createDelay, DIST, distDrive, foldCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
+import { createDelay, createPan, DIST, distDrive, foldCurve, INSERTS, InsertChain, PCF_TYPES, softClipCurve, whiteNoise } from './effects.js';
 import { PCF_SLOTS, PCF_WAVE_COUNT, PCF_WAVES } from './pcf-waves.js';
 
 const BASS_KNOBS = ['tuning', 'cutoff', 'resonance', 'envmod', 'decay', 'accent', 'volume', 'waveform'];
@@ -21,11 +21,23 @@ const METER_RANGE_DB = 48;
 const VU_REF_DB = 16; // dBFS RMS that reads 0 VU
 const SPECTRUM_BANDS = 28;
 const MAX_FILTER_HZ = 14000;
-// Pan knob offset -> equal-power pan position, clamped at the ends. Fitted to
+// ReBirth's level curve (ReBirth.dll's level table, as documented by OpenRB-338):
+// each knob step is a factor of 23/24 (0.37 dB), 127 is unity and 0 silence. It
+// serves the channel faders, the master (doubled) and the pan law.
+const LEVEL_STEP = 23 / 24;
+const levelCurve = (v) => (v > 0 ? LEVEL_STEP ** (127 * (1 - v)) : 0);
+const byte = (v) => Math.min(127, Math.max(0, Math.round(v * 127)));
+// Pan: turning away from a side takes (d * d) >> 5 steps of the level curve off it
+// (d = pan - 64), down to silence once that reaches the channel's level; the near
+// side keeps its level, so panning never makes a channel louder. Agrees with
 // ReBirth's per-channel exports (808 at pan 0.22 / 0.28 / 0.63 / 0.71: right minus
-// left -14.5 / -7.9 / +4.0 / +7.9 dB) and a test song panned hard left (no leak).
-const PAN_WIDTH = 1.2;
-const panPos = (knob) => Math.max(-1, Math.min(1, (knob - 0.5) * 2 * PAN_WIDTH));
+// left measured -14.5 / -7.9 / +4.0 / +7.9 dB).
+function panGains(pan, level = 1) {
+  const d = byte(pan) - 64;
+  const q = (d * d) >> 5;
+  const away = byte(level) - q >= 1 ? LEVEL_STEP ** q : 0;
+  return d > 0 ? [away, 1] : d < 0 ? [1, away] : [1, 1];
+}
 // 909 per-step accent ("double power"): measured +3.3..+4.2 dB on the same voice.
 const STEP_ACCENT = 1.55;
 // Accent-track depth per accent-level knob. The 909's is strong: at level 32/127
@@ -41,13 +53,12 @@ const INPUT_GAIN = { bass1: 1, bass2: 1, r808: 0.55, r909: 0.55 };
 export const CHANNEL_TRIM_DB = { bass1: 0, bass2: 0, r808: 0, r909: 0 };
 
 
-// Channel faders: linear in dB, 0.367 dB per step of 127, unity at the top
-// (measured in a ReBirth export: 11.7 dB per 32 steps, 32 dB from 40 to 127).
-const faderGain = (v) => (v > 0 ? 10 ** ((-0.367 * 127 * (1 - v)) / 20) : 0);
-// Master fader: unresolved. A test export lost 7.4 dB from 100 to 80 (as steep as
-// the channels), but full-song exports at master 97..104 sit as if the top of the
-// range were much flatter; v * v fits those, and the voices were calibrated with it.
-const masterGain = (v) => v * v;
+// Channel faders follow the level curve (measured in a ReBirth export: 11.7 dB per
+// 32 steps, 32 dB from 40 to 127). The master is the curve doubled: a test export
+// lost 7.4 dB from 100 to 80, and at 100 it's within 0.2 dB of the v * v the
+// voices were calibrated with.
+const faderGain = levelCurve;
+const masterGain = (v) => 2 * levelCurve(v);
 
 // Compressor, fitted to a ReBirth export of a steady tone with the fader stepping
 // through 32/64/96/127 under every threshold and amount. Levels are the export's
@@ -110,6 +121,8 @@ export class AudioEngine {
     this.state = state;
     this.ctx = null;
     this.last = new WeakMap();
+    // The song's sound model: 0 "ReBirth 2.0", 1 "Vintage ReBirth" (see bass-voice.js).
+    state.define('song.vintage', 0);
   }
 
   // Must be called from a user gesture the first time (autoplay policy).
@@ -149,10 +162,14 @@ export class AudioEngine {
     for (const [id, label] of CHANNELS) {
       const input = ctx.createGain();
       const post = ctx.createGain();
-      const pan = ctx.createStereoPanner();
+      const pan = createPan(ctx);
       const fader = ctx.createGain();
       const mute = ctx.createGain();
       const send = ctx.createGain();
+      // The delay send: after the fader and before the pan (ReBirth 2.0 sound), or
+      // after the pan (Vintage), where it's the average of the two sides.
+      const sendPre = ctx.createGain();
+      const sendPost = ctx.createGain();
       input.gain.value = INPUT_GAIN[id];
       // Channels run in stereo from the input on: every voice level and the pan law
       // were fitted that way (a mono input through the panner loses 3 dB).
@@ -160,13 +177,16 @@ export class AudioEngine {
       input.channelCountMode = 'explicit';
       post.gain.value = 10 ** (CHANNEL_TRIM_DB[id] / 20);
       const inserts = new InsertChain(ctx, input, post);
-      post.connect(pan).connect(fader).connect(mute).connect(this.masterBus);
+      post.connect(fader).connect(pan.in);
+      pan.out.connect(mute).connect(this.masterBus);
       const meter = this.stereoMeter(mute);
       // Before the mute: what the channel would sound like, for the ghosted
       // meters of muted / switched-off machines.
-      const ghost = this.stereoMeter(fader);
-      mute.connect(send).connect(this.delay.in);
-      this.channels[id] = { label, input, inserts, pan, fader, mute, send, meter, ghost };
+      const ghost = this.stereoMeter(pan.out);
+      fader.connect(sendPre).connect(send);
+      mute.connect(sendPost).connect(send);
+      send.connect(this.delay.in);
+      this.channels[id] = { label, input, inserts, pan, fader, mute, send, sendPre, sendPost, meter, ghost };
     }
     // Effect activity meters: delay echoes, and each chain's distortion output.
     this.delayMeter = this.analyser();
@@ -280,7 +300,9 @@ export class AudioEngine {
   };
 
   bassParams(id) {
-    return Object.fromEntries(BASS_KNOBS.map((k) => [k, this.state.get(`${id}.${k}`)]));
+    const p = Object.fromEntries(BASS_KNOBS.map((k) => [k, this.state.get(`${id}.${k}`)]));
+    p.vintage = this.state.on01('song.vintage');
+    return p;
   }
 
   stepDuration() {
@@ -308,16 +330,20 @@ export class AudioEngine {
     const g = (k) => state.get(k);
 
     for (const id of BASS_IDS) this.bass[id].setParams(this.bassParams(id), set);
+    const vintage = state.on01('song.vintage');
 
     const anySolo = CHANNELS.some(([id]) => state.on01(`mixer.${id}.solo`));
     for (const [id, ch] of Object.entries(this.channels)) {
       ch.audible = audibleChannel(state, id, anySolo);
-      // Measured against ReBirth: its pan law is a little gentler than equal-power at full width.
-      set(ch.pan.pan, panPos(g(`mixer.${id}.pan`)));
+      const [l, r] = panGains(g(`mixer.${id}.pan`), g(`mixer.${id}.level`));
+      set(ch.pan.l, l);
+      set(ch.pan.r, r);
       set(ch.fader.gain, faderGain(g(`mixer.${id}.level`)));
       // Measured: send 64 echoes 5.1 dB below send 127, close to linear amplitude.
       set(ch.send.gain, g(`mixer.${id}.delay`));
       set(ch.mute.gain, ch.audible ? 1 : 0, 0.005);
+      set(ch.sendPre.gain, ch.audible && !vintage ? 1 : 0, 0.005);
+      set(ch.sendPost.gain, vintage ? 1 : 0, 0.005);
     }
     set(this.masterFader.gain, masterGain(g('mixer.master.level')));
     set(this.volume.gain, g('master.volume') ** 2 * 0.8);
@@ -330,7 +356,9 @@ export class AudioEngine {
     set(d.delay.delayTime, Math.min(11.9, steps * unit), 0.05);
     // Each repeat is `feedback` times the last: -6 dB at 64, endless at 127.
     set(d.feedback.gain, g('fx.delay.feedback'));
-    set(d.pan.pan, panPos(g('fx.delay.pan')));
+    const [dl, dr] = panGains(g('fx.delay.pan'));
+    set(d.pan.l, dl);
+    set(d.pan.r, dr);
     // At full send an echo is 1.8 dB below the dry note (return knob at its default).
     set(this.delayReturn.gain, g('mixer.delayReturn') * 1.48);
 
@@ -471,8 +499,7 @@ export class AudioEngine {
     if (this.state.transport.playing) return;
     const t = this.ctx.currentTime + 0.01;
     this.sync();
-    this.bass[id].sliding = false;
-    this.bass[id].step(step, { gate: false }, t, Math.min(0.3, this.stepDuration() * 2), this.bassParams(id));
+    this.bass[id].audition(step, t, Math.min(0.3, this.stepDuration() * 2), this.bassParams(id));
   }
 
   auditionDrum(id, track) {

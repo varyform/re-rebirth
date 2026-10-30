@@ -156,16 +156,36 @@ export class InsertChain {
   }
 }
 
-// Mono tempo-synced echo with a darkening feedback loop, panned into the mix.
+// Two gains on a stereo signal (a mono one is copied to both sides first), set
+// from ReBirth's pan law in the engine.
+export function createPan(ctx) {
+  const input = ctx.createGain();
+  input.channelCount = 2;
+  input.channelCountMode = 'explicit';
+  const split = ctx.createChannelSplitter(2);
+  const merge = ctx.createChannelMerger(2);
+  const l = ctx.createGain();
+  const r = ctx.createGain();
+  input.connect(split);
+  split.connect(l, 0).connect(merge, 0, 0);
+  split.connect(r, 1).connect(merge, 0, 1);
+  return { in: input, out: merge, l: l.gain, r: r.gain };
+}
+
+// Mono tempo-synced echo, panned into the mix. The send is summed to mono, as
+// ReBirth's send bus is.
 export function createDelay(ctx) {
   const input = ctx.createGain();
+  input.channelCount = 1;
+  input.channelCountMode = 'explicit';
   const delay = ctx.createDelay(12);
   // ReBirth's echoes keep their tone: at full feedback they repeat unchanged forever.
   const feedback = ctx.createGain();
-  const pan = ctx.createStereoPanner();
+  const pan = createPan(ctx);
   const out = ctx.createGain();
   input.connect(delay);
   delay.connect(feedback).connect(delay);
-  delay.connect(pan).connect(out);
+  delay.connect(pan.in);
+  pan.out.connect(out);
   return { in: input, out, delay, feedback, pan };
 }
