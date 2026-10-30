@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### New
+- **Song information:** ⓘ at the end of the song display's title line, or ⌘/Ctrl I, opens it.
+  - Edit the title, the text, the web page and the copyright. Each field counts down what a ReBirth file holds. In the text a line break counts as two, as in ReBirth's own dialog, so ReBirth won't cut a full text short. The web page has an OPEN link.
+  - It also shows the file name, the mod it was made for with the mod's web and FTP addresses, the file format, tempo, mode, loop, shuffle, and the bar of the last recorded event.
+  - SYNTH SOUND switches between ReBirth 2.0 and Vintage, which songs could only bring with them before.
+  - Saving as `.rbs` keeps all of it, including the copyright and a mod's addresses.
+
+### Changed
+- **SAVE now saves a ReBirth song (.rbs)**, and Shift-click saves the Re-Rebirth session (.json); they used to be the other way round. ⌘/Ctrl S and ⌘/Ctrl ⇧ S swapped too. The session file still keeps the two things `.rbs` has no room for, the bass lines' volume knobs and the delay return, and the save notice names them when they'd be lost.
+
 ## 0.9.0 — 2026-10-30
 
 ### New

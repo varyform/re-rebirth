@@ -7,6 +7,7 @@ const AUTOSAVE_KEY = 're-rebirth.session';
 // iPadOS reports itself as a Mac, so also check for touch.
 const isIOS = () => /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 const AUTOSAVE_DELAY = 800;
+const JSON_FORMAT = 'Re-Rebirth session (.json)';
 
 export class Files {
   constructor(state, { beforeLoad, onLoaded, onError }) {
@@ -18,10 +19,12 @@ export class Files {
   async open(file) {
     try {
       const buffer = await file.arrayBuffer();
-      const session = isRbs(buffer) ? parseRbs(buffer, file.name) : JSON.parse(new TextDecoder().decode(buffer));
+      const rbs = isRbs(buffer);
+      const session = rbs ? parseRbs(buffer, file.name) : JSON.parse(new TextDecoder().decode(buffer));
       this.beforeLoad?.();
       applySession(this.state, session);
       if (!this.state.info.file) this.state.info.file = file.name;
+      if (!rbs) this.state.info.format = JSON_FORMAT;
       this.autosave();
       this.onLoaded?.(this.state, file);
       return true;

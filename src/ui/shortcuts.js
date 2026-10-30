@@ -6,6 +6,7 @@ import { RAIL_STRIPS } from '../render/devices/rail.js';
 import { brushOf, rangeBars } from '../render/devices/arrange.js';
 import { R808, R909 } from '../render/devices/drum-machine.js';
 import { openExport } from '../render/export.js';
+import { openSongInfo } from '../render/song-info.js';
 import { shownDevices } from '../render/focus-view.js';
 import { deleteBars, duplicateBars, insertBars } from '../song/arrange-ops.js';
 import { doublePattern, reversePattern, shiftPattern, transposePattern } from '../song/pattern-ops.js';
@@ -210,8 +211,9 @@ export function shortcutGroups(state, app) {
       ...(ui.stage === 'patterns' && !ui.picker
         ? []
         : [{ keys: 'F', label: 'Full screen on / off', test: key('KeyF'), run: (e) => !e.repeat && app.toggleFullscreen() }]),
-      { keys: '\u2318/CTRL S', label: 'Save the song', test: key('KeyS', { withMod: true, shift: false }), run: () => app.files.save() },
-      { keys: '\u2318/CTRL \u21E7 S', label: 'Save as a ReBirth song (.rbs)', test: key('KeyS', { withMod: true, shift: true }), run: () => app.notify(app.files.saveRbs()) },
+      { keys: '\u2318/CTRL S', label: 'Save the song (ReBirth .rbs)', test: key('KeyS', { withMod: true, shift: false }), run: () => app.notify(app.files.saveRbs()) },
+      { keys: '\u2318/CTRL \u21E7 S', label: 'Save as a Re-Rebirth session (.json, keeps everything)', test: key('KeyS', { withMod: true, shift: true }), run: () => app.files.save() },
+      { keys: '\u2318/CTRL I', label: 'Song information', test: key('KeyI', { withMod: true }), run: () => openSongInfo(state) },
       { keys: '\u2318/CTRL O', label: 'Open a song', test: key('KeyO', { withMod: true }), run: () => app.files.pick() },
       { keys: '\u2318/CTRL E', label: 'Export WAV', test: key('KeyE', { withMod: true }), run: () => openExport(state) },
       { keys: 'ESC', label: 'Close a window, the picker, this list' },

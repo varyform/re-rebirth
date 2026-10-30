@@ -128,7 +128,18 @@ export function parseRbs(buffer, fileName = '') {
   const session = {
     format: 're-rebirth',
     version: 1,
-    info: { title: '', text: '', url: '', file: fileName, mod },
+    // Song Information (render/song-info.js): the mod's addresses are only shown.
+    info: {
+      title: '',
+      text: '',
+      url: '',
+      file: fileName,
+      mod,
+      modWeb: r.zstr(glob.at + 281, 201),
+      modFtp: r.zstr(glob.at + 80, 201),
+      copyright: '',
+      format: '',
+    },
     transport: {},
     params: {},
     bass: {},
@@ -150,7 +161,7 @@ export function parseRbs(buffer, fileName = '') {
   const usri = find(top, 'USRI');
   if (usri) {
     session.info.title = r.zstr(usri.at, 41);
-    session.info.text = r.zstr(usri.at + 41, 401);
+    session.info.text = r.zstr(usri.at + 41, 401).replace(/\r\n?/g, '\n');
     session.info.url = r.zstr(usri.at + 442, 101);
   }
 
@@ -158,6 +169,8 @@ export function parseRbs(buffer, fileName = '') {
   // mixer controllers differently. Verified on songs of each kind.
   const head = find(top, 'HEAD');
   const version = head ? r.u8(head.at + 6) : 0;
+  session.info.format = `RBS 4.${version}`;
+  session.info.copyright = head ? r.zstr(head.at + 9, 129) : '';
 
   const dev = devl.children;
   const bassChunks = dev.filter((c) => c.id === '303 ');

@@ -65,7 +65,8 @@ export class State {
     }
     this.song = emptySong();
     // `mod`: the ReBirth mod a song was made for, empty for the standard sounds.
-    this.info = { title: '', text: '', url: '', file: '', mod: '' };
+    // The rest is what Song Information shows (render/song-info.js).
+    this.info = { title: '', text: '', url: '', file: '', mod: '', modWeb: '', modFtp: '', copyright: '', format: '' };
     this.emit('reset', {});
   }
 

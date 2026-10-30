@@ -111,10 +111,10 @@ const concat = (parts) => {
 
 const cat = (type, children) => chunk('CAT ', concat([new TextEncoder().encode(type), ...children]));
 
-function head() {
+function head(info) {
   const w = new Writer(256);
   VERSION.forEach((b, i) => w.u8(i, b));
-  w.zstr(9, 129, COPYRIGHT);
+  w.zstr(9, 129, info?.copyright || COPYRIGHT);
   return chunk('HEAD', w.bytes);
 }
 
@@ -131,10 +131,8 @@ function glob(s) {
   // again (it finds mods by name; the addresses are only shown).
   const mod = s.info?.mod;
   w.zstr(15, 65, mod || STANDARD_MOD);
-  if (!mod) {
-    w.zstr(80, 201, 'ftp.propellerheads.se');
-    w.zstr(281, 201, 'www.propellerheads.se');
-  }
+  w.zstr(80, 201, mod ? s.info.modFtp : 'ftp.propellerheads.se');
+  w.zstr(281, 201, mod ? s.info.modWeb : 'www.propellerheads.se');
   w.u8(482, (s.params['song.vintage'] ?? 0) >= 0.5 ? 1 : 0);
   return chunk('GLOB', w.bytes);
 }
@@ -341,7 +339,7 @@ export function writeRbs(s) {
     drums('r909', s.drums.r909, P),
   ]);
   const trkl = cat('TRKL', trackEvents(s).map(trak));
-  return cat('RB40', [head(), glob(s), usri(s.info), devl, trkl]);
+  return cat('RB40', [head(s.info), glob(s), usri(s.info), devl, trkl]);
 }
 
 // What the song has that a .rbs can't hold, for a notice.

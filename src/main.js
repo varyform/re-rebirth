@@ -2,6 +2,7 @@ import './style.css';
 import { AudioEngine } from './audio/engine.js';
 import { loadDemo } from './demo.js';
 import { addedMessage, closeLibrary, openLibrary, SEARCH_PLACEHOLDER } from './render/library.js';
+import { closeSongInfo, fitField, INFO_FIELDS } from './render/song-info.js';
 import { setLineScale, thinLines } from './render/primitives.js';
 import { Rack } from './render/rack.js';
 
@@ -100,6 +101,23 @@ const search = canvasInput(canvas, {
   },
 });
 
+// Song Information's text fields (render/song-info.js): edits go straight into
+// the song's info, cut to what a ReBirth file holds.
+const infoInputs = INFO_FIELDS.map((field) => {
+  const box = canvasInput(canvas, {
+    multiline: field.multiline,
+    autofocus: false,
+    onInput: (value) => {
+      const fitted = fitField(field, value);
+      if (fitted !== value) box.input.value = fitted;
+      state.info[field.key] = fitted;
+      files.autosave();
+      requestRender();
+    },
+  });
+  return { field, box };
+});
+
 function requestRender() {
   if (!frame) frame = requestAnimationFrame(render);
 }
@@ -145,6 +163,8 @@ function render() {
   view.draw(ctx, { chromeScale: (view.k === view.chromeScale ? chromeScale : viewScale * view.k) * dpr });
   const lib = state.ui.library;
   search.place(lib?.search ?? null, view.width, lib?.query ?? '');
+  const info = state.ui.songInfo;
+  for (const { field, box } of infoInputs) box.place(info?.rects[field.key] ?? null, view.width, state.info[field.key] ?? '');
 }
 
 // Pushes knob changes to the audio graph and pulls playhead/meter updates back.
@@ -208,6 +228,14 @@ function watchPixelRatio() {
 }
 
 window.addEventListener('keydown', (e) => {
+  // Typing in Song Information: keys are text; Escape closes the window.
+  if (infoInputs.some(({ box }) => e.target === box.input)) {
+    if (e.code !== 'Escape') return;
+    e.preventDefault();
+    closeSongInfo(state);
+    requestRender();
+    return;
+  }
   // Typing in the search field: Escape clears it first, other keys are just text.
   if (e.target === search.input) {
     if (e.code !== 'Escape') return;
@@ -238,13 +266,14 @@ window.addEventListener('keydown', (e) => {
     requestRender();
     return;
   }
-  if (e.code === 'Escape' && state.ui.picker && !(state.ui.about || state.ui.library || state.ui.automation)) {
+  if (e.code === 'Escape' && state.ui.picker && !(state.ui.about || state.ui.songInfo || state.ui.library || state.ui.automation)) {
     state.ui.picker = false;
     requestRender();
     return;
   }
-  if (e.code === 'Escape' && (state.ui.about || state.ui.library || state.ui.automation)) {
+  if (e.code === 'Escape' && (state.ui.about || state.ui.songInfo || state.ui.library || state.ui.automation)) {
     if (state.ui.about) state.ui.about = false;
+    else if (state.ui.songInfo) closeSongInfo(state);
     else if (state.ui.library) closeLibrary(state);
     else state.ui.automation = null;
     requestRender();
@@ -263,7 +292,7 @@ window.addEventListener('keydown', (e) => {
   };
   // With a window open only play/stop and the list work.
   const { ui } = state;
-  if (ui.about || ui.library || ui.automation || ui.export || ui.midiWindow) {
+  if (ui.about || ui.songInfo || ui.library || ui.automation || ui.export || ui.midiWindow) {
     if (e.code === 'Space' && !e.repeat) {
       clock.toggle();
       handled();

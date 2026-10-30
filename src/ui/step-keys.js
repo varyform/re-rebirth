@@ -8,7 +8,7 @@ const NOTE_KEYS = { KeyA: 0, KeyW: 1, KeyS: 2, KeyE: 3, KeyD: 4, KeyF: 5, KeyT: 
 // The bass line notes are written to: the one PATTERNS shows, if no window is open.
 export function stepTarget(state) {
   const { ui } = state;
-  if (ui.stage !== 'patterns' || ui.about || ui.library || ui.automation || ui.picker || ui.export || ui.help || ui.midiWindow) return null;
+  if (ui.stage !== 'patterns' || ui.about || ui.songInfo || ui.library || ui.automation || ui.picker || ui.export || ui.help || ui.midiWindow) return null;
   const [id] = shownDevices(state);
   return BASS_IDS.includes(id) ? id : null;
 }

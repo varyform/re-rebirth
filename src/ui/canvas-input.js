@@ -1,15 +1,16 @@
-// A real <input> over a box the canvas draws: canvas UI can't take text (no
-// touch keyboard, paste or IME). Drawing code says where the box is in rack
-// units; `place` maps that onto the page after each render.
-export function canvasInput(canvas, { placeholder, onInput }) {
-  const input = Object.assign(document.createElement('input'), {
-    type: 'search',
-    className: 'canvas-input',
+// A real <input> (or <textarea>) over a box the canvas draws: canvas UI can't
+// take text (no touch keyboard, paste or IME). Drawing code says where the box
+// is in rack units; `place` maps that onto the page after each render.
+// multiline: a textarea. autofocus: take the keyboard when it appears (desktop).
+export function canvasInput(canvas, { placeholder = '', onInput, multiline = false, autofocus = true }) {
+  const input = Object.assign(document.createElement(multiline ? 'textarea' : 'input'), {
+    className: multiline ? 'canvas-input multiline' : 'canvas-input',
     placeholder,
     spellcheck: false,
     autocomplete: 'off',
     hidden: true,
   });
+  if (!multiline) input.type = autofocus ? 'search' : 'text';
   input.addEventListener('input', () => onInput(input.value));
   document.body.append(input);
 
@@ -37,7 +38,7 @@ export function canvasInput(canvas, { placeholder, onInput }) {
       if (input.hidden) {
         input.hidden = false;
         // Desktop: type straight away. Touch screens only show a keyboard on a tap.
-        if (!matchMedia('(pointer: coarse)').matches) input.focus();
+        if (autofocus && !matchMedia('(pointer: coarse)').matches) input.focus();
       }
     },
   };

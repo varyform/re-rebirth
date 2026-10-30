@@ -2,6 +2,7 @@ import { songBars, TICKS_PER_BAR } from '../../song/song.js';
 import { hits } from '../../ui/hits.js';
 import { click, release, repeat, tempoDrag } from '../../ui/handlers.js';
 import { openAbout } from '../about.js';
+import { openSongInfo } from '../song-info.js';
 import { openAutomation } from '../automation.js';
 import { openLibrary } from '../library.js';
 import { Knob } from '../controls.js';
@@ -128,10 +129,13 @@ export class Transport {
     const line2 = notice ? (notice.length > 52 ? `${notice.slice(0, 51)}\u2026` : notice) : status;
     text(ctx, line2, SONG_X + 5, 34.5, { size: 5.5, family: MONO, align: 'left', color: notice ? C.lcdGreenOn : C.lcdGreenMid, halo });
 
+    this.drawInfoButton(ctx);
+
     const files = this.app.files;
     // OPEN and SAVE open system UI, so they fire on release (see `release`).
-    // Shift-click SAVE: as a ReBirth song (.rbs).
-    const save = (ev) => (ev.fine ? this.app.notify(files.saveRbs()) : files.save());
+    // SAVE: as a ReBirth song (.rbs); Shift-click: our own session file, which
+    // also keeps what .rbs has no room for.
+    const save = (ev) => (ev.fine ? files.save() : this.app.notify(files.saveRbs()));
     const buttons = [
       ['NEW', 32, () => files.newSong(), click],
       ['OPEN', 36, () => files.pick(), release],
@@ -155,6 +159,20 @@ export class Transport {
     const aOff = button(ctx, ax, 47, aw, 15, { pressed: hits.isPressed('song.automation') });
     text(ctx, 'AUTOMATION', ax + aw / 2, 55 + aOff, { size: 5.4, weight: 800, color: C.inkLight, spacing: 0.2 });
     hits.rect(ctx, ax, 47, aw, 15, click(() => openAutomation(state), 'song.automation'));
+  }
+
+  // ⓘ at the end of the title line: Song Information.
+  drawInfoButton(ctx) {
+    const x = SONG_X + SONG_W - 9;
+    const y = 25.5;
+    const key = 'song.info';
+    ctx.beginPath();
+    ctx.arc(x, y, 3.6, 0, Math.PI * 2);
+    ctx.strokeStyle = hits.isPressed(key) ? C.lcdGreenOn : C.lcdGreenMid;
+    ctx.lineWidth = 0.9;
+    ctx.stroke();
+    text(ctx, 'i', x, y + 0.4, { size: 5.5, weight: 800, family: MONO, color: hits.isPressed(key) ? C.lcdGreenOn : C.lcdGreenMid });
+    hits.rect(ctx, x - 7, y - 6, 14, 12, click(() => openSongInfo(this.state), key));
   }
 
   // Into the focus stages; their stage bar leads back to the rack. Fits between
