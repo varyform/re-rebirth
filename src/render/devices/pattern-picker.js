@@ -1,7 +1,8 @@
 // Pattern picker: all 32 patterns of one machine (banks A-D down, 1-8 across)
 // as small previews, in place of the instrument. Bass lines show as piano
 // rolls, drum patterns as lane grids. Click one to play it (while playing it
-// waits for the end of the current pattern, like the selectors). Shift-click
+// waits for the end of the current pattern, like the selectors); double-click
+// to pick it and close the picker. Shift-click
 // adds patterns to a chain the machine plays in turn (pattern mode; state.js),
 // shown in the header with the one playing lit. The rail stays beside it, so
 // another machine is one click away.
@@ -23,7 +24,7 @@ const LOW = -12;
 const HIGH = 24;
 const COPY = {
   title: (id) => `PATTERNS \u00B7 ${NAMES[id]}`,
-  playHint: 'CLICK OR \u2190 \u2192 \u2191 \u2193 TO PLAY \u00B7 SHIFT-CLICK TO CHAIN PATTERNS \u00B7 WHILE PLAYING, A CHANGE WAITS FOR THE END OF THE PATTERN',
+  playHint: 'CLICK OR \u2190 \u2192 \u2191 \u2193 TO PLAY \u00B7 DOUBLE-CLICK: PLAY AND CLOSE \u00B7 SHIFT-CLICK TO CHAIN \u00B7 WHILE PLAYING, A CHANGE WAITS FOR THE END OF THE PATTERN',
   brushHint: 'CLICK THE PATTERN TO PAINT WITH',
   chain: 'CHAIN',
   songMode: '\u00B7 PLAYS IN PATTERN MODE',
@@ -90,7 +91,9 @@ export class PatternPicker {
         const lit = index === current || (!brushMode && dev.queued === index && blink);
         this.drawCell(ctx, x, y, cw, ch, index, lit, !brushMode && index === current);
         if (chained) this.drawChainBadge(ctx, x + cw, y, dev, index);
-        hits.rect(ctx, x, y, cw, ch, click((ev) => pick(index, ev), `picker.${index}`));
+        // Double-click: pick it and close the picker (the first click already picked).
+        const close = () => !brushMode && (state.ui.picker = false);
+        hits.rect(ctx, x, y, cw, ch, { ...click((ev) => pick(index, ev), `picker.${index}`), dblclick: close });
       }
     }
   }
