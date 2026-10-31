@@ -263,6 +263,28 @@ function controllerFor(key, value) {
   return null;
 }
 
+// Every controller's value at the start, as [rbsTrack, controller, byte]. In song
+// mode ReBirth takes knobs, patterns and routing from the tracks alone and ignores
+// the device chunks' values (OpenRB-338, docs/song_load.md); a controller without
+// an event at position 0 starts at ReBirth's factory value. ReBirth's own files
+// carry one for every controller, and so do ours.
+function startValues(s) {
+  const P = s.params;
+  const param = (key) => P[key] ?? (key.endsWith('.on') ? 1 : key.endsWith('.pan') ? 0.5 : 0);
+  const keys = [
+    ...BASS_IDS.flatMap((id) => [`${id}.on`, `${id}.waveform`, ...BASS_KNOBS.map((k) => `${id}.${k}`)]),
+    ...Object.entries(DRUMS).flatMap(([id, { knobs }]) => [`${id}.on`, ...knobs.map((k) => `${id}.${k}`)]),
+    ...CHANNEL_IDS.flatMap((id) => ['level', 'pan', 'delay', 'dist'].map((k) => `mixer.${id}.${k}`)),
+    'fx.pcf.target',
+    ...FX.flatMap(([prefix, names]) => names.map((n) => `${prefix}.${n}`)),
+  ];
+  return [
+    ...keys.map((key) => controllerFor(key, param(key))).filter(Boolean),
+    [0, 1, compDevice(P['fx.comp.routed'], P['fx.comp.target'])],
+    ...CHANNEL_IDS.map((id, i) => [1 + i, 1, selected((s.bass[id] ?? s.drums[id]))]),
+  ];
+}
+
 function trackEvents(s) {
   const P = s.params;
   const out = Array.from({ length: 9 }, () => []);
@@ -286,12 +308,7 @@ function trackEvents(s) {
     const c = controllerFor(e.key, e.value);
     if (c) out[c[0]].push({ tick: e.tick, cid: c[1], value: c[2] });
   }
-  // Every track needs an event at position 0: a value already in force.
-  const atZero = [
-    { cid: 6, value: byte(P['mixer.bass1.level']) },
-    ...['bass1', 'bass2', 'r808', 'r909'].map((id) => ({ cid: 0, value: flag(P[`${id}.on`] ?? 1) })),
-    ...FX.map(([prefix]) => ({ cid: 0, value: flag(P[`${prefix}.on`] ?? 1) })),
-  ];
+  const start = startValues(s);
   return out.map((events, i) => {
     events.sort((a, b) => a.tick - b.tick);
     // Several values for one controller at one position: the last one counts.
@@ -300,8 +317,9 @@ function trackEvents(s) {
       .reverse()
       .filter((e) => !seen.has(`${e.tick}:${e.cid}`) && seen.add(`${e.tick}:${e.cid}`))
       .reverse();
-    if (!kept.length || kept[0].tick > 0) kept.unshift({ tick: 0, ...atZero[i] });
-    return kept;
+    const atZero = new Set(kept.filter((e) => e.tick === 0).map((e) => e.cid));
+    const missing = start.filter(([n, cid]) => n === i && !atZero.has(cid)).map(([, cid, value]) => ({ tick: 0, cid, value }));
+    return [...missing, ...kept];
   });
 }
 
