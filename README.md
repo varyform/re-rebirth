@@ -114,7 +114,9 @@ The file reader follows Propellerhead's format description ([`docs/RBS42.txt`](d
 
 ## How close does it sound?
 
-The voices and effects are synthesized from scratch. Their settings were fitted by measuring ReBirth's own renders: full songs, per-channel exports and a test song that plays every drum sound in isolation. Only levels, pitch, decay and spectra were measured; no audio from ReBirth is included or used in the app. A few rules (the level curve and pan law, the tune knob's steps, how bass rests and slides play, and the Vintage sound) follow the documentation of ReBirth's engine by [OpenRB-338](https://github.com/pingw33n/openrb-338).
+The voices and effects are synthesized from scratch. Their settings were fitted by measuring ReBirth's own renders: full songs, per-channel exports and a test song that plays every drum sound in isolation. Only levels, pitch, decay and spectra were measured; no audio from ReBirth is included or used in the app. A few rules (the level curve and pan law, the tune knob's steps, how bass rests, slides and accents play, and the Vintage sound) follow the documentation of ReBirth's engine by [OpenRB-338](https://github.com/pingw33n/openrb-338).
+
+It aims to sound close, not identical. A bit-exact match isn't planned: it would mean porting ReBirth's decompiled code, which other projects already do. For ReBirth's exact sound, use a recompiled ReBirth for modern platforms, or [OpenRB-338](https://github.com/pingw33n/openrb-338).
 
 ## Development
 
