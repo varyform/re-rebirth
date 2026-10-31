@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.3 — 2026-10-31
 
 ### New
 - **Pattern chains:** Shift-click patterns in the pattern picker (or on a machine's 1–8 buttons in the rack) and the machine plays them in turn, then goes round: A1 → A3 → B2 → A1… A quick way to sketch a part longer than one pattern without writing the song. Each machine has its own chain, starting from the pattern it's on.
