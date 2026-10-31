@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.4 — 2026-10-31
 
 ### Fixed
 - **Songs saved as `.rbs` play right in ReBirth's song mode:** ReBirth's song mode takes every knob from the song's track, not from the machines' saved settings, and a knob the song never sets starts at ReBirth's factory value. Re-Rebirth wrote only the knobs you had automated, so a song saved as `.rbs` played in ReBirth with the other knobs at their factory values (a different cutoff, drum levels and so on). It now writes every knob's starting value, as ReBirth's own files do. Pattern mode was already right. Thanks to Reto Senn for spotting it (#2).
