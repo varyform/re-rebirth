@@ -12,6 +12,7 @@
 - **Held notes show as you make them:** a rest right after a note with SLIDE holds that note (that's how ReBirth stores held notes), and its step now shows ⁀ straight away, lit like a note. It used to show as a rest until the song was saved and opened again. The PATTERNS hint says so: SLIDE + REST HOLDS. The pattern picker's piano rolls draw these held notes too.
 - Double-click a pattern in the pattern picker to play it and close the picker.
 - ARRANGE's toolbar buttons (DUPLICATE, DELETE, INSERT, UNDO, FIT) are now the same size as AUTOMATE's, and the song's rows get the room they gave up.
+- **Accents at high resonance sound like ReBirth's:** an accented note no longer jumps straight to its full brightness. The accent now swells in over a few milliseconds, more slowly the higher the resonance, and its filter sweep shrinks as resonance goes up, as in ReBirth. Squelchy lines with lots of resonance lose the harsh, fizzy top they had on every accent. Unaccented notes sound the same as before. Thanks to Reto Senn for finding it (#2).
 
 ## 0.9.2 — 2026-10-30
 

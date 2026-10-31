@@ -70,12 +70,30 @@ function decayTau(knob) {
   const i = Math.min(DECAY_TAUS.length - 2, Math.floor(x));
   return DECAY_TAUS[i] * (DECAY_TAUS[i + 1] / DECAY_TAUS[i]) ** (x - i);
 }
-// Accent: a short sweep on top (decay knob ignored) and a VCA boost that fades
-// over the step and drops back at the next step.
-const ACCENT_OCTAVES = 3.3;
+// Accent: a short sweep on top (decay knob ignored) and a VCA boost, fitted at
+// resonance 32 to ReBirth's export of tools/bass-test-song.mjs, peak values.
+const ACCENT_OCTAVES = 2.4;
 const ACCENT_TAU = 0.065;
-const ACCENT_GAIN = 2.85; // extra VCA gain at full accent
+const ACCENT_GAIN = 2.4; // extra VCA gain at full accent
 const ACCENT_GAIN_TAU = 0.092;
+const ACCENT_FIT_RESO = 32 / 127;
+// In ReBirth.dll (documented by OpenRB-338) both run through one accent envelope:
+// a one-pole fed by the filter envelope times the accent amount, its pole set by
+// resonance: coef = ((reso/12700 + 0.99) * 0.999) per sample at 44.1 kHz, a rise
+// of ~2 ms at resonance 0, ~6 ms at 95 and ~23 ms at 127. Its share of the cutoff
+// shrinks with resonance (0.10167 - reso/15); the VCA takes it as gain x (1 + acc).
+const accentRise = (r) => -1 / (44100 * Math.log((Math.round(r * 127) / 12700 + 0.99) * 0.999));
+const accentDepth = (r) => (0.10167 - Math.round(r * 127) / 127 / 15) / (0.10167 - ACCENT_FIT_RESO / 15);
+// The one-pole's answer to an exponential is k(e^(-t/fall) - e^(-t/rise)) with
+// k = fall / (fall - rise); scaled so that at the fitted resonance it peaks at 1.
+function peakOf(rise, fall) {
+  const t = (Math.log(fall / rise) * rise * fall) / (fall - rise);
+  return Math.exp(-t / fall) - Math.exp(-t / rise);
+}
+function accentScale(rise, fall) {
+  const fit = accentRise(ACCENT_FIT_RESO);
+  return (fall - fit) / (fall - rise) / peakOf(fit, fall);
+}
 
 const midiToHz = (m) => 440 * 2 ** ((m - 69) / 12);
 
@@ -105,6 +123,44 @@ export function hold(param, t) {
   else param.cancelScheduledValues(t);
 }
 
+// The accent envelope on some params, as two constant sources whose sum is the
+// one-pole: `up` holds k e^(-t/fall), `down` the rest, which decays at the rise
+// time. A new input starts from whatever is left, so the level never jumps.
+class AccentEnv {
+  constructor(ctx, params) {
+    this.srcs = [ctx.createConstantSource(), ctx.createConstantSource()];
+    for (const src of this.srcs) {
+      src.offset.value = 0;
+      for (const param of params) src.connect(param);
+      src.start();
+    }
+    this.events = []; // as scheduled, oldest first: { t, left, k, rise, fall }
+  }
+
+  valueAt(t) {
+    const e = this.events.findLast((e) => e.t <= t);
+    if (!e) return 0;
+    const r = Math.exp(-(t - e.t) / e.rise);
+    return e.left * r + e.k * (Math.exp(-(t - e.t) / e.fall) - r);
+  }
+
+  // Sets the input at `t`: k = 0 lets the envelope die away at the rise time.
+  input(t, k, rise, fall) {
+    const left = this.valueAt(t);
+    this.events = this.events.filter((e) => e.t < t).slice(-7);
+    this.events.push({ t, left, k, rise, fall });
+    const [up, down] = this.srcs.map((s) => s.offset);
+    for (const [param, value, tau] of [
+      [up, k, fall],
+      [down, left - k, rise],
+    ]) {
+      param.cancelScheduledValues(t);
+      param.setValueAtTime(value, t);
+      param.setTargetAtTime(0, t, tau);
+    }
+  }
+}
+
 export class BassVoice {
   constructor(ctx, out) {
     this.ctx = ctx;
@@ -129,21 +185,25 @@ export class BassVoice {
     this.qOut = ctx.createGain();
     const clamp = new WaveShaperNode(ctx, { curve: new Float32Array([-1, 1]) });
     this.env.connect(this.qIn).connect(clamp).connect(this.qOut).connect(this.f1.Q);
+    this.accentSweep = new AccentEnv(ctx, [this.f1.detune, this.f2.detune, this.qIn]);
     this.vca = ctx.createGain();
     this.vca.gain.value = 0;
+    this.boost = ctx.createGain(); // 1 + the accent
+    this.accentBoost = new AccentEnv(ctx, [this.boost.gain]);
     this.level = ctx.createGain();
     // One-pole highpass at 90 Hz: ReBirth keeps less of the fundamental than an
     // ideal sawtooth, 6 dB/octave below ~90 Hz.
     const p = Math.tan((Math.PI * 90) / ctx.sampleRate);
     const a = (1 - p) / (1 + p);
     const lowCut = ctx.createIIRFilter([(1 + a) / 2, -(1 + a) / 2], [1, -a]);
-    this.osc.connect(this.f1).connect(this.f2).connect(this.vca).connect(this.level).connect(lowCut).connect(out);
+    this.osc.connect(this.f1).connect(this.f2).connect(this.vca).connect(this.boost).connect(this.level).connect(lowCut).connect(out);
     this.osc.start();
     this.pitch.start();
     this.env.start();
     this.slide = false; // the last step's slide flag: the next step is legato
     this.open = false; // the gate (as scheduled up to the last step)
     this.vintage = false;
+    this.envStart = { t: 0, tau: 1 }; // the filter envelope's last retrigger
   }
 
   // Continuous controls. `set(param, value)` smooths and skips unchanged values.
@@ -174,6 +234,7 @@ export class BassVoice {
   // played step opens the gate. After a step with its slide flag set, the next one is
   // legato: the pitch glides and the filter envelope isn't retriggered, even when a
   // slid rest came between. The gate closes half a step in unless the step slides.
+  // Every step also sets the accent's input, from the envelope where it is now.
   step(s, next, t, stepDur, p) {
     const rest = !s.gate || s.tie;
     const legato = this.slide;
@@ -187,10 +248,10 @@ export class BassVoice {
     }
     if (!rest && !legato) {
       this.trigger(t, s.accent, p);
-      // A slid accent's VCA boost drops back at the next step.
-      if (s.accent && s.slide) this.vca.gain.setTargetAtTime(1, t + stepDur, 0.004);
-    } else if (!rest && !this.open) {
-      this.openGate(t);
+    } else {
+      if (!rest && !this.open) this.openGate(t);
+      const { t: t0, tau } = this.envStart;
+      this.accent(t, s.accent ? p.accent * Math.exp(-(t - t0) / tau) : 0, p);
     }
     if (!rest) this.open = true;
     this.slide = !!s.slide;
@@ -226,12 +287,13 @@ export class BassVoice {
   }
 
   trigger(t, accent, p) {
-    const acc = accent ? p.accent : 0;
     const env = this.env.offset;
-    const octaves = ENV_OCTAVES(p.envmod) + acc * ACCENT_OCTAVES;
+    const tau = accent ? ACCENT_TAU : decayTau(p.decay);
     env.cancelScheduledValues(t);
-    env.setValueAtTime(octaves * 1200, t);
-    env.setTargetAtTime(0, t, accent ? ACCENT_TAU : decayTau(p.decay));
+    env.setValueAtTime(ENV_OCTAVES(p.envmod) * 1200, t);
+    env.setTargetAtTime(0, t, tau);
+    this.envStart = { t, tau };
+    this.accent(t, accent ? p.accent : 0, p);
 
     // Every envelope starts from an explicit value: setTarget right after a
     // cancel has no defined start in some implementations and can explode.
@@ -239,9 +301,16 @@ export class BassVoice {
     const gain = this.vca.gain;
     gain.cancelScheduledValues(t);
     gain.setValueAtTime(0, t);
-    if (this.vintage) gain.setTargetAtTime(1 + acc * ACCENT_GAIN, t, VINTAGE_AMP);
-    else gain.linearRampToValueAtTime(1 + acc * ACCENT_GAIN, t + 0.001);
-    if (acc) gain.setTargetAtTime(1, t + 0.001, ACCENT_GAIN_TAU);
+    if (this.vintage) gain.setTargetAtTime(1, t, VINTAGE_AMP);
+    else gain.linearRampToValueAtTime(1, t + 0.001);
+  }
+
+  // The accent envelope's input: the accent amount times the filter envelope.
+  accent(t, amount, p) {
+    const rise = accentRise(p.resonance);
+    const sweep = amount * ACCENT_OCTAVES * 1200 * accentDepth(p.resonance);
+    this.accentSweep.input(t, sweep * accentScale(rise, ACCENT_TAU), rise, ACCENT_TAU);
+    this.accentBoost.input(t, amount * ACCENT_GAIN * accentScale(rise, ACCENT_GAIN_TAU), rise, ACCENT_GAIN_TAU);
   }
 
   // A legato note after the gate had closed (a slid rest came between): the VCA
