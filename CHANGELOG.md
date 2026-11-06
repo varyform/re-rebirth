@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- **Addresses that don't exist now say so:** they used to open the app, and now show a "not found" page.
+
 ## 0.9.4 — 2026-10-31
 
 ### Fixed
